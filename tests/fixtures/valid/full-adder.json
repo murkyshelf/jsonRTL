@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "full-adder",
+    "name": "Full Adder",
+    "ports": [
+      { "id": "input-a", "name": "a", "direction": "input", "width": 1, "netId": "net-a" },
+      { "id": "input-b", "name": "b", "direction": "input", "width": 1, "netId": "net-b" },
+      { "id": "input-cin", "name": "cin", "direction": "input", "width": 1, "netId": "net-cin" },
+      { "id": "output-sum", "name": "sum", "direction": "output", "width": 1, "netId": "net-sum" },
+      { "id": "output-cout", "name": "cout", "direction": "output", "width": 1, "netId": "net-cout" }
+    ],
+    "components": [
+      {
+        "id": "xor-ab",
+        "name": "xor_ab",
+        "type": "XOR",
+        "width": 1,
+        "connections": { "A": "net-a", "B": "net-b", "Y": "net-ab-xor" },
+        "parameters": {}
+      },
+      {
+        "id": "xor-sum",
+        "name": "xor_sum",
+        "type": "XOR",
+        "width": 1,
+        "connections": { "A": "net-ab-xor", "B": "net-cin", "Y": "net-sum" },
+        "parameters": {}
+      },
+      {
+        "id": "and-ab",
+        "name": "and_ab",
+        "type": "AND",
+        "width": 1,
+        "connections": { "A": "net-a", "B": "net-b", "Y": "net-ab-carry" },
+        "parameters": {}
+      },
+      {
+        "id": "and-cin",
+        "name": "and_cin",
+        "type": "AND",
+        "width": 1,
+        "connections": { "A": "net-ab-xor", "B": "net-cin", "Y": "net-cin-carry" },
+        "parameters": {}
+      },
+      {
+        "id": "or-cout",
+        "name": "or_cout",
+        "type": "OR",
+        "width": 1,
+        "connections": { "A": "net-ab-carry", "B": "net-cin-carry", "Y": "net-cout" },
+        "parameters": {}
+      }
+    ],
+    "nets": [
+      { "id": "net-a", "name": "a", "width": 1 },
+      { "id": "net-b", "name": "b", "width": 1 },
+      { "id": "net-cin", "name": "cin", "width": 1 },
+      { "id": "net-ab-xor", "name": "ab_xor", "width": 1 },
+      { "id": "net-ab-carry", "name": "ab_carry", "width": 1 },
+      { "id": "net-cin-carry", "name": "cin_carry", "width": 1 },
+      { "id": "net-sum", "name": "sum", "width": 1 },
+      { "id": "net-cout", "name": "cout", "width": 1 }
+    ]
+  }
+}
+

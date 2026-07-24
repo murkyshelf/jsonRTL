@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "2.0",
+  "circuit": {
+    "id": "future-version",
+    "name": "Future Version",
+    "ports": [],
+    "components": [],
+    "nets": []
+  }
+}
+

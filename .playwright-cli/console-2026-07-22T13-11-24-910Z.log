@@ -1,0 +1,107 @@
+[     108ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:20100
+[     128ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:3688
+[     128ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:3688
+[     350ms] Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:3524:128)
+    at enqueueConcurrentRenderForLane (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:3512:16)
+    at forceStoreRerender (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6102:21)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6088:107
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:199:39
+    at Set.forEach (<anonymous>)
+    at setState (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:199:17)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:4692:7
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:18565:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:995:72)
+[     350ms] [WARNING] %s
+
+%s
+ An error occurred in the <StoreUpdater> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6963
+[     356ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:5173/favicon.ico:0
+[   14133ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:20100
+[   14149ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:3688
+[   14149ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:3688
+[   14339ms] Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:3524:128)
+    at enqueueConcurrentRenderForLane (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:3512:16)
+    at forceStoreRerender (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6102:21)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6088:107
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:199:39
+    at Set.forEach (<anonymous>)
+    at setState (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:199:17)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:4692:7
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:18565:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:995:72)
+[   14338ms] [WARNING] %s
+
+%s
+ An error occurred in the <StoreUpdater> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6963
+[   33034ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:20100
+[   33042ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:3688
+[   33042ms] [WARNING] [React Flow]: It looks like you've created a new nodeTypes or edgeTypes object. If this wasn't on purpose please define the nodeTypes/edgeTypes outside of the component or memoize them. Help: https://reactflow.dev/error#002 @ http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:3688
+[   33239ms] Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:3524:128)
+    at enqueueConcurrentRenderForLane (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:3512:16)
+    at forceStoreRerender (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6102:21)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6088:107
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:199:39
+    at Set.forEach (<anonymous>)
+    at setState (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:199:17)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=2ed4c364:4692:7
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:18565:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:995:72)
+[   33238ms] [WARNING] %s
+
+%s
+ An error occurred in the <StoreUpdater> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=7c6d8bce:6963
+[   37950ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:5173/@vite/client:864
+[   42373ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:21606
+[   42448ms] Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at checkForNestedUpdates (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:19710:19)
+    at scheduleUpdateOnFiber (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:18581:11)
+    at forceStoreRerender (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:12045:13)
+    at handleStoreChange (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:12027:15)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:199:39
+    at Set.forEach (<anonymous>)
+    at setState (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:199:17)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:4692:7
+    at commitHookEffectListMount (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:16961:34)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:18204:19)
+[   42450ms] [ERROR] Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.%s 
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:4653:52
+    at Wrapper$1 (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:4665:22)
+    at Wrapper (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:7344:28)
+    at div
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:7375:50
+    at EditorCanvas (http://127.0.0.1:5173/src/pages/EditorPage.tsx:17:19)
+    at main
+    at div
+    at ReactFlowProvider (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:7336:38)
+    at EditorPage (http://127.0.0.1:5173/src/pages/EditorPage.tsx:82:33) @ http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:518
+[   42451ms] [ERROR] The above error occurred in the <StoreUpdater> component:
+
+    at StoreUpdater (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:4696:23)
+    at Wrapper (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:7344:28)
+    at div
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:7375:50
+    at EditorCanvas (http://127.0.0.1:5173/src/pages/EditorPage.tsx:17:19)
+    at main
+    at div
+    at ReactFlowProvider (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:7336:38)
+    at EditorPage (http://127.0.0.1:5173/src/pages/EditorPage.tsx:82:33)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:14077
+[   42451ms] Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at checkForNestedUpdates (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:19710:19)
+    at scheduleUpdateOnFiber (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:18581:11)
+    at forceStoreRerender (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:12045:13)
+    at handleStoreChange (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:12027:15)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:199:39
+    at Set.forEach (<anonymous>)
+    at setState (http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:199:17)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/reactflow.js?v=9db86847:4692:7
+    at commitHookEffectListMount (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:16961:34)
+    at commitPassiveMountOnFiber (http://127.0.0.1:5173/node_modules/.vite/deps/chunk-43Y54UQL.js?v=d9c941d6:18204:19)

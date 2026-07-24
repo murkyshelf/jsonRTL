@@ -1,0 +1,20 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "AND gate circuit" [ref=e5]
+      - heading "Logic Kernel Workbench" [level=1] [ref=e10]
+    - generic [ref=e11]: 400 Bad Request
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]: Circuit JSON
+        - generic [ref=e16]:
+          - button "Load Sample" [ref=e17] [cursor=pointer]
+          - button "Validate" [ref=e18] [cursor=pointer]
+          - button "Compile" [ref=e19] [cursor=pointer]
+      - textbox [ref=e20]: "{ \"schemaVersion\": \"1.0\", \"circuit\": { \"id\": \"minimal-and\", \"name\": \"Minimal AND\", \"ports\": [ { \"id\": \"a\", \"name\": \"a\", \"direction\": \"input\", \"width\": 1, \"net\": \"a\" }, { \"id\": \"b\", \"name\": \"b\", \"direction\": \"input\", \"width\": 1, \"net\": \"b\" }, { \"id\": \"y\", \"name\": \"y\", \"direction\": \"output\", \"width\": 1, \"net\": \"y\" } ], \"components\": [ { \"id\": \"and-1\", \"type\": \"AND\", \"name\": \"and gate\", \"connections\": { \"a\": \"a\", \"b\": \"b\", \"y\": \"y\" } } ], \"nets\": [ { \"id\": \"a\", \"name\": \"a\", \"width\": 1 }, { \"id\": \"b\", \"name\": \"b\", \"width\": 1 }, { \"id\": \"y\", \"name\": \"y\", \"width\": 1 } ] } }"
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: Kernel Output
+        - generic [ref=e24]: 400 Bad Request
+      - generic [ref=e25]: "{ \"success\": false, \"error\": { \"category\": \"SCHEMA_VALIDATION\", \"message\": \"Document does not satisfy canonical schema v1.0.\" }, \"diagnostics\": [ { \"code\": \"SCHEMA_REQUIRED_FIELD\", \"jsonPath\": \"/circuit/components/0\", \"schemaPath\": \"/$defs/component/required\", \"message\": \"\\\"parameters\\\" is a required property\" }, { \"code\": \"SCHEMA_REQUIRED_FIELD\", \"jsonPath\": \"/circuit/components/0\", \"schemaPath\": \"/$defs/component/required\", \"message\": \"\\\"width\\\" is a required property\" }, { \"code\": \"SCHEMA_REQUIRED_FIELD\", \"jsonPath\": \"/circuit/ports/0\", \"schemaPath\": \"/$defs/modulePort/required\", \"message\": \"\\\"netId\\\" is a required property\" }, { \"code\": \"SCHEMA_UNKNOWN_FIELD\", \"jsonPath\": \"/circuit/ports/0\", \"schemaPath\": \"/$defs/modulePort/additionalProperties\", \"message\": \"Additional properties are not allowed ('net' was unexpected)\" }, { \"code\": \"SCHEMA_REQUIRED_FIELD\", \"jsonPath\": \"/circuit/ports/1\", \"schemaPath\": \"/$defs/modulePort/required\", \"message\": \"\\\"netId\\\" is a required property\" }, { \"code\": \"SCHEMA_UNKNOWN_FIELD\", \"jsonPath\": \"/circuit/ports/1\", \"schemaPath\": \"/$defs/modulePort/additionalProperties\", \"message\": \"Additional properties are not allowed ('net' was unexpected)\" }, { \"code\": \"SCHEMA_REQUIRED_FIELD\", \"jsonPath\": \"/circuit/ports/2\", \"schemaPath\": \"/$defs/modulePort/required\", \"message\": \"\\\"netId\\\" is a required property\" }, { \"code\": \"SCHEMA_UNKNOWN_FIELD\", \"jsonPath\": \"/circuit/ports/2\", \"schemaPath\": \"/$defs/modulePort/additionalProperties\", \"message\": \"Additional properties are not allowed ('net' was unexpected)\" } ], \"schemaVersion\": \"1.0\", \"compilerVersion\": \"0.1.0\", \"requestId\": \"req-95061-000000000003\" }"

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "every-gate",
+    "name": "every_gate",
+    "ports": [
+      { "id": "input-a", "name": "a", "direction": "input", "width": 1, "netId": "net-a" },
+      { "id": "input-b", "name": "b", "direction": "input", "width": 1, "netId": "net-b" },
+      { "id": "output-and", "name": "and_y", "direction": "output", "width": 1, "netId": "net-and" },
+      { "id": "output-buffer", "name": "buffer_y", "direction": "output", "width": 1, "netId": "net-buffer" },
+      { "id": "output-const", "name": "const_y", "direction": "output", "width": 1, "netId": "net-const" },
+      { "id": "output-nand", "name": "nand_y", "direction": "output", "width": 1, "netId": "net-nand" },
+      { "id": "output-nor", "name": "nor_y", "direction": "output", "width": 1, "netId": "net-nor" },
+      { "id": "output-not", "name": "not_y", "direction": "output", "width": 1, "netId": "net-not" },
+      { "id": "output-or", "name": "or_y", "direction": "output", "width": 1, "netId": "net-or" },
+      { "id": "output-xnor", "name": "xnor_y", "direction": "output", "width": 1, "netId": "net-xnor" },
+      { "id": "output-xor", "name": "xor_y", "direction": "output", "width": 1, "netId": "net-xor" }
+    ],
+    "components": [
+      { "id": "gate-and", "name": "gate_and", "type": "AND", "width": 1, "connections": { "A": "net-a", "B": "net-b", "Y": "net-and" }, "parameters": {} },
+      { "id": "gate-buffer", "name": "gate_buffer", "type": "BUFFER", "width": 1, "connections": { "A": "net-a", "Y": "net-buffer" }, "parameters": {} },
+      { "id": "gate-const", "name": "gate_const", "type": "CONST", "width": 1, "connections": { "Y": "net-const" }, "parameters": { "value": "1" } },
+      { "id": "gate-nand", "name": "gate_nand", "type": "NAND", "width": 1, "connections": { "A": "net-a", "B": "net-b", "Y": "net-nand" }, "parameters": {} },
+      { "id": "gate-nor", "name": "gate_nor", "type": "NOR", "width": 1, "connections": { "A": "net-a", "B": "net-b", "Y": "net-nor" }, "parameters": {} },
+      { "id": "gate-not", "name": "gate_not", "type": "NOT", "width": 1, "connections": { "A": "net-a", "Y": "net-not" }, "parameters": {} },
+      { "id": "gate-or", "name": "gate_or", "type": "OR", "width": 1, "connections": { "A": "net-a", "B": "net-b", "Y": "net-or" }, "parameters": {} },
+      { "id": "gate-xnor", "name": "gate_xnor", "type": "XNOR", "width": 1, "connections": { "A": "net-a", "B": "net-b", "Y": "net-xnor" }, "parameters": {} },
+      { "id": "gate-xor", "name": "gate_xor", "type": "XOR", "width": 1, "connections": { "A": "net-a", "B": "net-b", "Y": "net-xor" }, "parameters": {} }
+    ],
+    "nets": [
+      { "id": "net-a", "name": "a_net", "width": 1 },
+      { "id": "net-b", "name": "b_net", "width": 1 },
+      { "id": "net-and", "name": "and_net", "width": 1 },
+      { "id": "net-buffer", "name": "buffer_net", "width": 1 },
+      { "id": "net-const", "name": "const_net", "width": 1 },
+      { "id": "net-nand", "name": "nand_net", "width": 1 },
+      { "id": "net-nor", "name": "nor_net", "width": 1 },
+      { "id": "net-not", "name": "not_net", "width": 1 },
+      { "id": "net-or", "name": "or_net", "width": 1 },
+      { "id": "net-xnor", "name": "xnor_net", "width": 1 },
+      { "id": "net-xor", "name": "xor_net", "width": 1 }
+    ]
+  }
+}
+

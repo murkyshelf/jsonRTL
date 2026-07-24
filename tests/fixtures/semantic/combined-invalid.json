@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "combined-invalid",
+    "name": "combined_invalid",
+    "ports": [
+      { "id": "duplicate-port", "name": "data", "direction": "input", "width": 1, "netId": "net-input" },
+      { "id": "duplicate-port", "name": "data", "direction": "input", "width": 1, "netId": "net-input" },
+      { "id": "extra-driver", "name": "extra", "direction": "input", "width": 1, "netId": "net-input" },
+      { "id": "output-y", "name": "y", "direction": "output", "width": 1, "netId": "net-output" },
+      { "id": "dangling-port", "name": "dangling", "direction": "output", "width": 1, "netId": "missing-net" }
+    ],
+    "components": [
+      {
+        "id": "and-1",
+        "name": "and_gate",
+        "type": "AND",
+        "width": 2,
+        "connections": { "A": "net-input", "Y": "net-output", "Q": "missing-net" },
+        "parameters": { "unexpected": true }
+      },
+      {
+        "id": "constant-1",
+        "name": "constant",
+        "type": "CONST",
+        "width": 1,
+        "connections": { "Y": "net-input" },
+        "parameters": { "value": "x" }
+      }
+    ],
+    "nets": [
+      { "id": "net-input", "name": "input_signal", "width": 1 },
+      { "id": "net-output", "name": "output_signal", "width": 1 },
+      { "id": "unused-net", "name": "unused_signal", "width": 1 }
+    ]
+  }
+}
+

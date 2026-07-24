@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.btn {
+  @apply rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 hover:border-slate-500;
+}
+
+.btn-primary {
+  @apply rounded-md border border-emerald-600 bg-emerald-900/70 px-3 py-1.5 text-sm text-emerald-50 hover:border-emerald-400;
+}
+
+.panel {
+  @apply min-h-0 space-y-4 border-slate-800 bg-slate-950 p-3;
+}
+
+.panel:first-child {
+  @apply border-r;
+}
+
+.panel:last-child {
+  @apply border-l;
+}
+
+.panel-title {
+  @apply text-sm font-semibold text-slate-200;
+}
+
+.field {
+  @apply block space-y-1 text-sm text-slate-400;
+}
+
+.field input {
+  @apply w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-slate-100 outline-none focus:border-emerald-500;
+}

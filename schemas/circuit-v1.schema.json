@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-logic-kernel.local/schemas/circuit-v1.schema.json",
+  "title": "Digital Logic Kernel canonical circuit document v1.0",
+  "description": "UI-independent, versioned public document for combinational digital logic. UI data is permitted only in editorMetadata and has no logical meaning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "circuit"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "description": "Exact canonical document contract version.",
+      "const": "1.0",
+      "examples": [
+        "1.0"
+      ]
+    },
+    "circuit": {
+      "$ref": "#/$defs/circuit"
+    },
+    "editorMetadata": {
+      "description": "Optional opaque UI-owned JSON. Its content is ignored by all kernel semantics.",
+      "examples": [
+        {
+          "zoom": 1.25,
+          "nodes": {
+            "and-1": {
+              "x": 320,
+              "y": 180
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "description": "Stable identity string. IDs are distinct from display names and array positions.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "examples": [
+        "gate-42"
+      ]
+    },
+    "displayName": {
+      "description": "Non-empty display name. Names need not be unique and are never identity.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "examples": [
+        "carry_gate"
+      ]
+    },
+    "width": {
+      "description": "Positive bit width. V1 connections require exact widths with no implicit conversion.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4096,
+      "examples": [
+        1,
+        8
+      ]
+    },
+    "circuit": {
+      "description": "One flat combinational circuit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "ports",
+        "components",
+        "nets"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "name": {
+          "$ref": "#/$defs/displayName"
+        },
+        "ports": {
+          "description": "Module boundary ports. Array order is semantically irrelevant.",
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/modulePort"
+          }
+        },
+        "components": {
+          "description": "V1 component instances. Array order is semantically irrelevant.",
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/component"
+          }
+        },
+        "nets": {
+          "description": "Logical nets referenced by module ports and component connection maps.",
+          "type": "array",
+          "maxItems": 20000,
+          "items": {
+            "$ref": "#/$defs/net"
+          }
+        }
+      }
+    },
+    "modulePort": {
+      "description": "Circuit boundary port. Inputs drive their net; outputs consume their net.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "direction",
+        "width",
+        "netId"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "name": {
+          "$ref": "#/$defs/displayName"
+        },
+        "direction": {
+          "description": "Direction as observed from outside the circuit.",
+          "type": "string",
+          "enum": [
+            "input",
+            "output"
+          ]
+        },
+        "width": {
+          "$ref": "#/$defs/width"
+        },
+        "netId": {
+          "$ref": "#/$defs/stableId"
+        }
+      },
+      "examples": [
+        {
+          "id": "input-a",
+          "name": "a",
+          "direction": "input",
+          "width": 1,
+          "netId": "net-a"
+        }
+      ]
+    },
+    "component": {
+      "description": "Catalog component instance. Port/parameter semantics are validated after schema validation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "type",
+        "width",
+        "connections",
+        "parameters"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "name": {
+          "$ref": "#/$defs/displayName"
+        },
+        "type": {
+          "description": "Exact V1 component catalog type.",
+          "type": "string",
+          "enum": [
+            "AND",
+            "OR",
+            "XOR",
+            "XNOR",
+            "NAND",
+            "NOR",
+            "NOT",
+            "BUFFER",
+            "CONST"
+          ]
+        },
+        "width": {
+          "$ref": "#/$defs/width"
+        },
+        "connections": {
+          "description": "Logical component port name to net ID. Exact catalog ports are checked semantically.",
+          "type": "object",
+          "maxProperties": 3,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/stableId"
+          },
+          "examples": [
+            {
+              "A": "net-a",
+              "B": "net-b",
+              "Y": "net-y"
+            }
+          ]
+        },
+        "parameters": {
+          "description": "Parameter object. Exact names and values are checked against the component catalog later.",
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "additionalProperties": true,
+          "examples": [
+            {},
+            {
+              "value": "10100101"
+            }
+          ]
+        }
+      }
+    },
+    "net": {
+      "description": "A logical net whose drivers and sinks are derived from canonical references.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "width"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "name": {
+          "$ref": "#/$defs/displayName"
+        },
+        "width": {
+          "$ref": "#/$defs/width"
+        }
+      },
+      "examples": [
+        {
+          "id": "net-y",
+          "name": "y",
+          "width": 1
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "schemaVersion": "1.0",
+      "circuit": {
+        "id": "empty-contract-example",
+        "name": "Empty illustrative circuit",
+        "ports": [],
+        "components": [],
+        "nets": []
+      }
+    }
+  ]
+}

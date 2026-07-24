@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "invalid-enum",
+    "name": "Invalid Enum",
+    "ports": [],
+    "components": [
+      {
+        "id": "mux-1",
+        "name": "unsupported_mux",
+        "type": "MUX",
+        "width": 1,
+        "connections": {},
+        "parameters": {}
+      }
+    ],
+    "nets": []
+  }
+}
+

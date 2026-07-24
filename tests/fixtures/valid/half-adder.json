@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "half-adder",
+    "name": "Half Adder",
+    "ports": [
+      { "id": "input-a", "name": "a", "direction": "input", "width": 1, "netId": "net-a" },
+      { "id": "input-b", "name": "b", "direction": "input", "width": 1, "netId": "net-b" },
+      { "id": "output-sum", "name": "sum", "direction": "output", "width": 1, "netId": "net-sum" },
+      { "id": "output-carry", "name": "carry", "direction": "output", "width": 1, "netId": "net-carry" }
+    ],
+    "components": [
+      {
+        "id": "xor-sum",
+        "name": "sum_gate",
+        "type": "XOR",
+        "width": 1,
+        "connections": { "A": "net-a", "B": "net-b", "Y": "net-sum" },
+        "parameters": {}
+      },
+      {
+        "id": "and-carry",
+        "name": "carry_gate",
+        "type": "AND",
+        "width": 1,
+        "connections": { "A": "net-a", "B": "net-b", "Y": "net-carry" },
+        "parameters": {}
+      }
+    ],
+    "nets": [
+      { "id": "net-a", "name": "a", "width": 1 },
+      { "id": "net-b", "name": "b", "width": 1 },
+      { "id": "net-sum", "name": "sum", "width": 1 },
+      { "id": "net-carry", "name": "carry", "width": 1 }
+    ]
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "multiple-errors",
+    "name": "Multiple Errors",
+    "ports": [],
+    "components": [
+      {
+        "id": "bad-1",
+        "name": "bad",
+        "type": "MUX",
+        "width": 0,
+        "connections": {},
+        "parameters": {},
+        "position": { "x": 1, "y": 2 }
+      }
+    ],
+    "nets": []
+  }
+}
+

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "constant-output",
+    "name": "Four-bit Constant Output",
+    "ports": [
+      { "id": "output-value", "name": "value", "direction": "output", "width": 4, "netId": "net-value" }
+    ],
+    "components": [
+      {
+        "id": "constant-1",
+        "name": "constant",
+        "type": "CONST",
+        "width": 4,
+        "connections": { "Y": "net-value" },
+        "parameters": { "value": "0011" }
+      }
+    ],
+    "nets": [
+      { "id": "net-value", "name": "value", "width": 4 }
+    ]
+  }
+}
+

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "unknown-field",
+    "name": "Unknown Field",
+    "ports": [],
+    "components": [],
+    "nets": [],
+    "canvas": { "zoom": 2 }
+  }
+}
+

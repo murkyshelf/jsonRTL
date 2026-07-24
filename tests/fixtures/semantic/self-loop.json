@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "self-loop",
+    "name": "self_loop",
+    "ports": [],
+    "components": [
+      {
+        "id": "buffer-1",
+        "name": "buffer_1",
+        "type": "BUFFER",
+        "width": 1,
+        "connections": { "A": "loop-net", "Y": "loop-net" },
+        "parameters": {}
+      }
+    ],
+    "nets": [
+      { "id": "loop-net", "name": "loop_net", "width": 1 }
+    ]
+  }
+}
+

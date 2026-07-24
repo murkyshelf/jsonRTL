@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "width-zero",
+    "name": "Width Zero",
+    "ports": [],
+    "components": [],
+    "nets": [
+      { "id": "net-zero", "name": "zero", "width": 0 }
+    ]
+  }
+}
+

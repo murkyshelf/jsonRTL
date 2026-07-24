@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "minimal-and",
+    "name": "Minimal AND",
+    "ports": [
+      { "id": "input-a", "name": "a", "direction": "input", "width": 1, "netId": "net-a" },
+      { "id": "input-b", "name": "b", "direction": "input", "width": 1, "netId": "net-b" },
+      { "id": "output-y", "name": "y", "direction": "output", "width": 1, "netId": "net-y" }
+    ],
+    "components": [
+      {
+        "id": "and-1",
+        "name": "and_gate",
+        "type": "AND",
+        "width": 1,
+        "connections": { "A": "net-a", "B": "net-b", "Y": "net-y" },
+        "parameters": {}
+      }
+    ],
+    "nets": [
+      { "id": "net-a", "name": "a", "width": 1 },
+      { "id": "net-b", "name": "b", "width": 1 },
+      { "id": "net-y", "name": "y", "width": 1 }
+    ]
+  }
+}
+

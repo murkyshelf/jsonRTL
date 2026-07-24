@@ -1,0 +1,20 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "AND gate circuit" [ref=e5]
+      - heading "Logic Kernel Workbench" [level=1] [ref=e10]
+    - generic [ref=e11]: 200 OK
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]: Circuit JSON
+        - generic [ref=e16]:
+          - button "Load Sample" [ref=e17] [cursor=pointer]
+          - button "Validate" [ref=e18] [cursor=pointer]
+          - button "Compile" [ref=e19] [cursor=pointer]
+      - textbox [ref=e20]: "{ \"schemaVersion\": \"1.0\", \"circuit\": { \"id\": \"minimal-and\", \"name\": \"Minimal AND\", \"ports\": [ { \"id\": \"input-a\", \"name\": \"a\", \"direction\": \"input\", \"width\": 1, \"netId\": \"net-a\" }, { \"id\": \"input-b\", \"name\": \"b\", \"direction\": \"input\", \"width\": 1, \"netId\": \"net-b\" }, { \"id\": \"output-y\", \"name\": \"y\", \"direction\": \"output\", \"width\": 1, \"netId\": \"net-y\" } ], \"components\": [ { \"id\": \"and-1\", \"name\": \"and_gate\", \"type\": \"AND\", \"width\": 1, \"connections\": { \"A\": \"net-a\", \"B\": \"net-b\", \"Y\": \"net-y\" }, \"parameters\": {} } ], \"nets\": [ { \"id\": \"net-a\", \"name\": \"a\", \"width\": 1 }, { \"id\": \"net-b\", \"name\": \"b\", \"width\": 1 }, { \"id\": \"net-y\", \"name\": \"y\", \"width\": 1 } ] } }"
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: Kernel Output
+        - generic [ref=e24]: 200 OK
+      - generic [ref=e25]: module Minimal_AND ( a, b, y ); input wire a; input wire b; output wire y; wire a__2; wire b__2; wire y__2; assign a__2 = a; assign b__2 = b; assign y = y__2; assign y__2 = a__2 & b__2; endmodule

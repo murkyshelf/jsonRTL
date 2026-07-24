@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "xor-with-mask-8",
+    "name": "Eight-bit XOR With Constant Mask",
+    "ports": [
+      { "id": "input-data", "name": "data_in", "direction": "input", "width": 8, "netId": "net-data" },
+      { "id": "output-data", "name": "data_out", "direction": "output", "width": 8, "netId": "net-result" }
+    ],
+    "components": [
+      {
+        "id": "constant-mask",
+        "name": "mask",
+        "type": "CONST",
+        "width": 8,
+        "connections": { "Y": "net-mask" },
+        "parameters": { "value": "10100101" }
+      },
+      {
+        "id": "xor-data-mask",
+        "name": "apply_mask",
+        "type": "XOR",
+        "width": 8,
+        "connections": { "A": "net-data", "B": "net-mask", "Y": "net-result" },
+        "parameters": {}
+      }
+    ],
+    "nets": [
+      { "id": "net-data", "name": "data_in", "width": 8 },
+      { "id": "net-mask", "name": "mask_value", "width": 8 },
+      { "id": "net-result", "name": "data_out", "width": 8 }
+    ]
+  }
+}
+

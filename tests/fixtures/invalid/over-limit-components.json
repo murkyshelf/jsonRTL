@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "over-limit",
+    "name": "Over Configured Component Limit",
+    "ports": [],
+    "components": [
+      {
+        "id": "buffer-1",
+        "name": "buffer",
+        "type": "BUFFER",
+        "width": 1,
+        "connections": {},
+        "parameters": {}
+      }
+    ],
+    "nets": []
+  }
+}
+

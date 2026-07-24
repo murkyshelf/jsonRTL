@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "sanitized-collisions",
+    "name": "123 Ω module",
+    "ports": [
+      { "id": "p-a", "name": "data-in", "direction": "input", "width": 1, "netId": "n-a" },
+      { "id": "p-b", "name": "data in", "direction": "input", "width": 1, "netId": "n-b" },
+      { "id": "p-y", "name": "output", "direction": "output", "width": 1, "netId": "n-y" }
+    ],
+    "components": [
+      { "id": "c-and", "name": "and gate", "type": "AND", "width": 1, "connections": { "A": "n-a", "B": "n-b", "Y": "n-y" }, "parameters": {} }
+    ],
+    "nets": [
+      { "id": "n-a", "name": "data-in", "width": 1 },
+      { "id": "n-b", "name": "data in", "width": 1 },
+      { "id": "n-y", "name": "output", "width": 1 }
+    ]
+  }
+}

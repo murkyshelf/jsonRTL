@@ -1,0 +1,39 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]: Digital Logic Editor
+    - generic [ref=e6]:
+      - button "New Project" [ref=e7]
+      - button "Open JSON" [ref=e8]
+      - button "Save JSON" [ref=e9]
+      - button "Generate Verilog" [ref=e10]
+  - main [ref=e11]:
+    - complementary [ref=e12]:
+      - heading "Component Library" [level=2] [ref=e13]
+      - generic [ref=e14]:
+        - heading "Inputs" [level=3] [ref=e15]
+        - button "INPUT" [ref=e16]
+      - generic [ref=e17]:
+        - heading "Outputs" [level=3] [ref=e18]
+        - button "OUTPUT" [ref=e19]
+      - generic [ref=e20]:
+        - heading "Logic Gates" [level=3] [ref=e21]
+        - button "AND" [ref=e22]
+        - button "OR" [ref=e23]
+        - button "XOR" [ref=e24]
+        - button "NOT" [ref=e25]
+        - button "NAND" [ref=e26]
+    - generic [ref=e27]:
+      - generic [ref=e32]:
+        - button "zoom in" [ref=e33] [cursor=pointer]
+        - button "zoom out" [ref=e36] [cursor=pointer]
+        - button "fit view" [ref=e39] [cursor=pointer]
+        - button "toggle interactivity" [ref=e42] [cursor=pointer]
+      - img "React Flow mini map" [ref=e46]
+      - link "React Flow attribution" [ref=e48] [cursor=pointer]:
+        - /url: https://reactflow.dev
+        - text: React Flow
+    - complementary [ref=e50]:
+      - heading "Properties" [level=2] [ref=e51]
+      - paragraph [ref=e52]: Select a component.
+  - contentinfo [ref=e53]:
+    - generic [ref=e54]: No validation messages.

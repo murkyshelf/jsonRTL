@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "circuit": {
+    "id": "missing-nets",
+    "name": "Missing Nets",
+    "ports": [],
+    "components": []
+  }
+}
+

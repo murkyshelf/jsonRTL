@@ -1,0 +1,18 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "AND gate circuit" [ref=e5]
+      - heading "Logic Kernel Workbench" [level=1] [ref=e10]
+    - generic [ref=e11]: Ready
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]: Circuit JSON
+        - generic [ref=e16]:
+          - button "Load Sample" [ref=e17] [cursor=pointer]
+          - button "Validate" [ref=e18] [cursor=pointer]
+          - button "Compile" [ref=e19] [cursor=pointer]
+      - textbox [ref=e20]: "{ \"schemaVersion\": \"1.0\", \"circuit\": { \"id\": \"minimal-and\", \"name\": \"Minimal AND\", \"ports\": [ { \"id\": \"a\", \"name\": \"a\", \"direction\": \"input\", \"width\": 1, \"net\": \"a\" }, { \"id\": \"b\", \"name\": \"b\", \"direction\": \"input\", \"width\": 1, \"net\": \"b\" }, { \"id\": \"y\", \"name\": \"y\", \"direction\": \"output\", \"width\": 1, \"net\": \"y\" } ], \"components\": [ { \"id\": \"and-1\", \"type\": \"AND\", \"name\": \"and gate\", \"connections\": { \"a\": \"a\", \"b\": \"b\", \"y\": \"y\" } } ], \"nets\": [ { \"id\": \"a\", \"name\": \"a\", \"width\": 1 }, { \"id\": \"b\", \"name\": \"b\", \"width\": 1 }, { \"id\": \"y\", \"name\": \"y\", \"width\": 1 } ] } }"
+    - generic [ref=e22]:
+      - generic [ref=e23]: Kernel Output
+      - generic [ref=e24]: No run yet
