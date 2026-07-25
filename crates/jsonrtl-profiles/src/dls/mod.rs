@@ -9,6 +9,7 @@ use std::path::Path;
 
 use crate::{NamedCircuit, ProfileError, ProjectConversion};
 
+pub mod builtin;
 pub mod elaborate;
 pub mod lower;
 pub mod model;
@@ -117,19 +118,24 @@ mod tests {
     }
 
     #[test]
-    fn rejects_multi_bit_pin() {
-        let error = elaborate::elaborate(
-            &model::load_project(&fixture("unsupported")).expect("load"),
-            "wide",
-        )
-        .unwrap_err();
-        match error {
-            ProfileError::Unsupported { chip, detail } => {
-                assert_eq!(chip, "wide");
-                assert!(detail.contains("bits wide"), "{detail}");
-            }
-            other => panic!("expected Unsupported, got {other:?}"),
-        }
+    fn multi_bit_pins_keep_their_width_through_to_verilog() {
+        // `wide` is a 4-bit input wired straight to a 4-bit output. Before
+        // Phase M this was rejected outright.
+        let conversion = DlsProfile
+            .convert_unit(&fixture("unsupported"), "wide")
+            .expect("a multi-bit chip converts");
+        let document = &conversion.circuits[0].document;
+        assert_eq!(document.schema_version.as_str(), "1.1");
+        assert!(
+            document.circuit.ports.iter().all(|port| port.width == 4),
+            "ports should stay 4 bits wide"
+        );
+        let verilog = Kernel::default()
+            .compile_verilog(document, &CompileOptions::default())
+            .verilog
+            .expect("compiles");
+        assert!(verilog.contains("input wire [3:0] in;"), "{verilog}");
+        assert!(verilog.contains("output wire [3:0] out;"), "{verilog}");
     }
 
     #[test]

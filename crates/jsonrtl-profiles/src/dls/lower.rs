@@ -1,24 +1,40 @@
 //! Lowers a flat NAND [`FlatNetlist`] into a canonical [`CircuitDocument`].
 //!
 //! Each net becomes a canonical `Net`, each NAND a `NAND` component, and each
-//! boundary pin a module `ModulePort`. A module input wired straight to a module
-//! output (no gate between them) gets a `BUFFER` so every output port has a
-//! component driver rather than relying on a port driving a port.
+//! boundary pin a module `ModulePort` carrying the pin's full width. Gates are
+//! always one bit, so a connection into a multi-bit net is emitted as a schema
+//! v1.1 slice. Where an output-pin bit is already driven under another name —
+//! a module input wired straight through, say — a one-bit `BUFFER` copies it,
+//! so every output bit has a component driver.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use jsonrtl::{
-    Circuit, CircuitDocument, Component, ComponentType, ModulePort, Net, PortDirection,
-    SchemaVersion,
+    Circuit, CircuitDocument, Component, ComponentType, Connection, ModulePort, Net, NetSlice,
+    PortDirection, SchemaVersion,
 };
 
-use crate::dls::elaborate::FlatNetlist;
+use crate::dls::elaborate::{BitRef, FlatNetlist};
 
-const SCHEMA_VERSION: &str = "1.0";
-const WIDTH: u32 = 1;
+const SCHEMA_VERSION: &str = "1.1";
+const GATE_WIDTH: u32 = 1;
 
 fn net_id(index: usize) -> String {
     format!("net{index}")
+}
+
+/// Addresses one bit, using a bare net id when the net is only one bit wide so
+/// single-bit chips still produce plain v1.0-shaped connections.
+fn connection(bit: BitRef, net_widths: &[u32]) -> Connection {
+    if net_widths.get(bit.net).copied().unwrap_or(1) == 1 {
+        Connection::Whole(net_id(bit.net))
+    } else {
+        Connection::Slice(NetSlice {
+            net: net_id(bit.net),
+            msb: bit.bit,
+            lsb: bit.bit,
+        })
+    }
 }
 
 /// Returns a module-unique port name, since the kernel requires distinct
@@ -41,13 +57,15 @@ fn unique_name(used: &mut BTreeSet<String>, base: &str) -> String {
 /// Builds a canonical document for `chip_name` from its flattened netlist.
 #[must_use]
 pub fn lower(chip_name: &str, flat: &FlatNetlist) -> CircuitDocument {
-    let nand_outputs: BTreeSet<usize> = flat.nands.iter().map(|nand| nand.y).collect();
+    let widths = &flat.net_widths;
 
-    let mut nets: Vec<Net> = (0..flat.net_count)
-        .map(|index| Net {
+    let nets: Vec<Net> = widths
+        .iter()
+        .enumerate()
+        .map(|(index, width)| Net {
             id: net_id(index),
             name: net_id(index),
-            width: WIDTH,
+            width: *width,
         })
         .collect();
 
@@ -59,15 +77,29 @@ pub fn lower(chip_name: &str, flat: &FlatNetlist) -> CircuitDocument {
             id: format!("gate{index}"),
             name: format!("gate{index}"),
             component_type: ComponentType::Nand,
-            width: WIDTH,
+            width: GATE_WIDTH,
             connections: BTreeMap::from([
-                ("A".to_string(), net_id(nand.a).into()),
-                ("B".to_string(), net_id(nand.b).into()),
-                ("Y".to_string(), net_id(nand.y).into()),
+                ("A".to_string(), connection(nand.a, widths)),
+                ("B".to_string(), connection(nand.b, widths)),
+                ("Y".to_string(), connection(nand.y, widths)),
             ]),
             parameters: BTreeMap::new(),
         })
         .collect();
+
+    for (index, pass) in flat.buffers.iter().enumerate() {
+        components.push(Component {
+            id: format!("buffer{index}"),
+            name: format!("buffer{index}"),
+            component_type: ComponentType::Buffer,
+            width: GATE_WIDTH,
+            connections: BTreeMap::from([
+                ("A".to_string(), connection(pass.from, widths)),
+                ("Y".to_string(), connection(pass.to, widths)),
+            ]),
+            parameters: BTreeMap::new(),
+        });
+    }
 
     let mut used_names: BTreeSet<String> = BTreeSet::new();
     let mut ports: Vec<ModulePort> = flat
@@ -78,45 +110,18 @@ pub fn lower(chip_name: &str, flat: &FlatNetlist) -> CircuitDocument {
             id: format!("port_in{index}"),
             name: unique_name(&mut used_names, &pin.name),
             direction: PortDirection::Input,
-            width: WIDTH,
+            width: pin.width,
             net_id: net_id(pin.net),
         })
         .collect();
 
-    let mut next_net = flat.net_count;
     for (index, pin) in flat.outputs.iter().enumerate() {
-        let port_net = if nand_outputs.contains(&pin.net) {
-            // Driven by a gate: the output port reads the gate's net directly.
-            net_id(pin.net)
-        } else {
-            // Pass-through (input wired straight to output): insert a BUFFER so
-            // the output net has a component driver.
-            let buffered = next_net;
-            next_net += 1;
-            nets.push(Net {
-                id: net_id(buffered),
-                name: net_id(buffered),
-                width: WIDTH,
-            });
-            components.push(Component {
-                id: format!("buffer{index}"),
-                name: format!("buffer{index}"),
-                component_type: ComponentType::Buffer,
-                width: WIDTH,
-                connections: BTreeMap::from([
-                    ("A".to_string(), net_id(pin.net).into()),
-                    ("Y".to_string(), net_id(buffered).into()),
-                ]),
-                parameters: BTreeMap::new(),
-            });
-            net_id(buffered)
-        };
         ports.push(ModulePort {
             id: format!("port_out{index}"),
             name: unique_name(&mut used_names, &pin.name),
             direction: PortDirection::Output,
-            width: WIDTH,
-            net_id: port_net,
+            width: pin.width,
+            net_id: net_id(pin.net),
         });
     }
 
@@ -136,7 +141,7 @@ pub fn lower(chip_name: &str, flat: &FlatNetlist) -> CircuitDocument {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dls::elaborate::{BoundaryPin, NandInst, elaborate};
+    use crate::dls::elaborate::{BoundaryPin, NandInst, PassThrough, elaborate};
     use crate::dls::model::load_project;
     use jsonrtl::{CompileOptions, Kernel};
     use std::path::PathBuf;
@@ -167,6 +172,22 @@ mod tests {
     }
 
     #[test]
+    fn a_single_bit_chip_still_uses_whole_net_connections() {
+        // Slices should appear only where a net is actually wide, so existing
+        // single-bit output stays byte-identical apart from the version.
+        let project = load_project(&project_dir()).expect("load");
+        let document = lower("AND", &elaborate(&project, "AND").expect("elaborate"));
+        assert!(
+            document
+                .circuit
+                .components
+                .iter()
+                .flat_map(|component| component.connections.values())
+                .all(|connection| connection.slice().is_none())
+        );
+    }
+
+    #[test]
     fn one_bit_adder_lowers_and_compiles() {
         let project = load_project(&project_dir()).expect("load");
         let flat = elaborate(&project, "1-bit adder").expect("elaborate");
@@ -182,13 +203,19 @@ mod tests {
             inputs: vec![BoundaryPin {
                 name: "a".into(),
                 net: 0,
+                width: 1,
             }],
             outputs: vec![BoundaryPin {
                 name: "y".into(),
-                net: 0,
+                net: 1,
+                width: 1,
             }],
             nands: Vec::<NandInst>::new(),
-            net_count: 1,
+            buffers: vec![PassThrough {
+                from: BitRef { net: 0, bit: 0 },
+                to: BitRef { net: 1, bit: 0 },
+            }],
+            net_widths: vec![1, 1],
         };
         let document = lower("wire", &flat);
         assert!(
@@ -201,5 +228,40 @@ mod tests {
         );
         let result = compile(&document);
         assert!(result.has_output(), "diagnostics: {:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn a_wide_port_keeps_its_bus_and_gates_address_single_bits() {
+        // Two 4-bit ports, with one NAND driving bit 2 of the output.
+        let flat = FlatNetlist {
+            inputs: vec![BoundaryPin {
+                name: "a".into(),
+                net: 0,
+                width: 4,
+            }],
+            outputs: vec![BoundaryPin {
+                name: "y".into(),
+                net: 1,
+                width: 4,
+            }],
+            nands: (0..4)
+                .map(|bit| NandInst {
+                    a: BitRef { net: 0, bit },
+                    b: BitRef { net: 0, bit },
+                    y: BitRef { net: 1, bit },
+                })
+                .collect(),
+            buffers: Vec::new(),
+            net_widths: vec![4, 4],
+        };
+        let document = lower("nibble", &flat);
+        assert_eq!(document.circuit.ports[0].width, 4);
+        let verilog = compile(&document).verilog.expect("compiles");
+        assert!(verilog.contains("input wire [3:0] a;"), "{verilog}");
+        assert!(verilog.contains("output wire [3:0] y;"), "{verilog}");
+        assert!(
+            verilog.contains("assign net1[2] = ~(net0[2] & net0[2]);"),
+            "{verilog}"
+        );
     }
 }

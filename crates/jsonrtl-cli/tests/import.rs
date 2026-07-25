@@ -59,7 +59,10 @@ fn import_auto_detects_profile_and_emits_canonical() {
     ]);
     assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
     let canonical = fs::read_to_string(directory.path().join("AND.json")).unwrap();
-    assert!(canonical.contains("\"schemaVersion\": \"1.0\""));
+    assert!(canonical.contains(&format!(
+        "\"schemaVersion\": \"{}\"",
+        jsonrtl::SUPPORTED_SCHEMA_VERSION
+    )));
     assert!(canonical.contains("\"NAND\""));
 }
 

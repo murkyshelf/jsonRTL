@@ -35,8 +35,30 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   instances are rejected with a diagnostic naming the component and coordinate.
   Marked experimental until the geometry is calibrated against real exports.
 - `roxmltree` dependency for reading `.circ` XML.
+- **Canonical schema v1.1: sliced connections.** A component connection may now
+  be `{ net, msb, lsb }` naming a contiguous inclusive bit range instead of a
+  bare net ID, which is what makes a bus splitter expressible. `Connection` is
+  untagged, so every v1.0 document parses unchanged, and a slice inside a
+  document declaring `1.0` is rejected. The single-driver rule now resolves per
+  bit, because a bus merger legitimately compiles to
+  `assign d[0] = ...; assign d[1] = ...;`, and combinational-cycle edges require
+  driver and consumer bit ranges to intersect. New diagnostics
+  `SLICE_OUT_OF_RANGE` and `SLICE_REQUIRES_SCHEMA_1_1`.
+- **Multi-bit buses in the DLS profile (Phase M).** Pins wider than one bit keep
+  their width to the module boundary, so a 16-bit adder exposes
+  `input wire [7:0] A0;` rather than eight scalar ports. Elaboration now runs
+  union-find over single bits, which makes DLS's `X-YBIT` splitters and mergers,
+  `BUS-N` aliases, and `BUS-TERMINUS-N` sinks pure re-labelling that emits no
+  logic. Bit ordering is most significant first, verified against the carry
+  chain of a real 16-bit adder.
 
 ### Fixed
+
+- **`--chip` blocked by unrelated chips.** `import` converted the whole project
+  before applying `--chip`, so one unsupported chip anywhere failed every other
+  chip: on a real DLS project `--chip AND` reported an error about a 16-bit
+  adder and exited 2. `Profile::convert_unit` now elaborates only the requested
+  unit's dependency closure.
 
 - **Path traversal in `import`.** Chip names from an untrusted
   `ProjectDescription.json` were joined unsanitized onto the input and output

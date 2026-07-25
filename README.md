@@ -8,7 +8,7 @@ being built phase by phase from the contracts in `PRODUCT_SPEC.md` and
 
 Phases 1 through 3 are implemented:
 
-- Canonical JSON Schema v1.0
+- Canonical JSON Schema v1.0, plus v1.1 sliced connections for multi-bit buses
 - Strongly typed public document model
 - Stable parse and schema diagnostics
 - Central V1 component catalog
@@ -25,7 +25,9 @@ The **format-import profiles** subsystem (`jsonrtl-profiles` crate)
 converts third-party project formats into canonical documents. The first profile
 imports Sebastian Lague's Digital-Logic-Sim (DLS) and Logisim / Logisim Evolution
 (`.circ`): the CLI `import` command reads a project, flattens it to primitive
-gates, and compiles one `.v` per chip or circuit. See `docs/profiles.md`.
+gates, and compiles one `.v` per chip or circuit. DLS buses are supported and
+keep their width, so a 16-bit adder compiles to a module with `[7:0]` ports.
+See `docs/profiles.md`.
 
 Simulation and physical-design execution are intentionally not implemented yet.
 

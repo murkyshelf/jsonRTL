@@ -51,13 +51,13 @@ diagnostics), always naming the offending source unit:
 | `profiles/dls/` manifest, docs, example | landed |
 | Logisim/Evolution profile (`.circ`, gates + pins) | landed, experimental |
 | Logisim subcircuit instances | blocked on port-geometry calibration |
-| Multi-bit buses (Phase M) | kernel supports width>1; DLS profile rejects (staged) |
+| Multi-bit buses (Phase M) | landed for DLS (schema v1.1 slices); Logisim rejects |
 | Hierarchical Verilog emission (Phase H) | staged |
 | Sequential / clock (Phase S) | staged |
 
-The kernel already compiles multi-bit (`width > 1`) circuits — see
-`tests/golden/eight-bit.v`. The DLS profile does not yet map DLS buses onto that
-capability; multi-bit pins are rejected until Phase M.
+Canonical schema v1.1 adds sliced connections (`{ net, msb, lsb }`), which is
+what lets a bus splitter be expressed at all. See
+`docs/superpowers/specs/2026-07-25-multi-bit-buses-design.md`.
 
 Design and task breakdown:
 `docs/superpowers/specs/2026-07-25-profiles-and-dls-import-design.md` and
@@ -109,14 +109,45 @@ and NAND **inputs** are sinks.
 
 ### Supported subset and rejections
 
-This phase supports **combinational, single-bit** logic with **NAND** as the only
-primitive. The following are rejected with a precise `ProfileError`, never
-silently skipped:
+This phase supports **combinational** logic of any width, with **NAND** as the
+only gate primitive.
 
-- any pin with `BitCount != 1` (multi-bit buses — staged Phase M);
-- any built-in other than NAND: `CLOCK`, `PULSE`, `KEY`, `3-STATE BUFFER`,
-  `BUS-*`, merge/split (`1-4BIT`, …), `7-SEGMENT` / displays, `ROM` / memory;
+### Buses
+
+Pins wider than one bit keep their width all the way to the Verilog module
+boundary, so a 16-bit adder exposes `input wire [7:0] A0;` rather than eight
+scalar ports. DLS decomposes buses with built-in splitter and merger chips
+named `X-YBIT`, meaning "convert X-bit to Y-bit":
+
+| Chip | Role | Input pins | Output pins |
+| --- | --- | --- | --- |
+| `8-1BIT` | split 8-bit into 8 bits | `0` | `1..8` |
+| `1-8BIT` | merge 8 bits into 8-bit | `0..7` | `8` |
+| `8-4BIT` | split 8-bit into two nibbles | `0` | `1..2` |
+| `4-8BIT` | merge two nibbles into 8-bit | `0..1` | `2` |
+
+Both orderings are **most significant first**: split output pin `k` (1-based) is
+bit `N - k`, and merge input pin `j` (0-based) is bit `N - 1 - j`.
+
+Two further built-ins are pure routing: `BUS-N` is a fan-out alias (pin `0` in,
+pin `1` out), and `BUS-TERMINUS-N` is the far end of a drawn bus line, which
+drives nothing and is dropped.
+
+None of these emit any logic. Elaboration runs union-find over **single bits**,
+so a narrow pin simply *is* a particular bit of its wide pin and both sides
+share a node. Gates then address individual bits through v1.1 slices.
+
+### Rejections
+
+The following are rejected with a precise `ProfileError`, never silently
+skipped:
+
+- any built-in outside the set above: `CLOCK`, `PULSE`, `KEY`,
+  `3-STATE BUFFER`, `7-SEGMENT` / displays, `ROM` / memory;
+- a wire joining pins of different widths;
 - combinational cycles or missing/multiple drivers (surfaced by the kernel).
+  Latch structures built from NAND feedback — DLS registers and RAM — are
+  genuine cycles for a combinational kernel and are reported as such.
 
 ## Untrusted-input rules
 
@@ -127,7 +158,7 @@ Project files are untrusted. The profile enforces these before doing any work:
 | A chip name must be a single ordinary path component | Names are joined onto both the `Chips/` input directory and the output directory. `..`, `a/b`, absolute paths, and Windows drive/separator forms are rejected so conversion can never read or write outside the directories it was given. |
 | Chip names must be unique | A name listed twice in `AllCustomChipNames` would otherwise collide on output. |
 | Boundary-pin ids and sub-chip instance ids must be distinct within a chip | A shared id makes a wire resolve to the wrong endpoint, silently mis-wiring the circuit. |
-| Flattening is capped at 50,000 NAND instances | Each level that instantiates its child twice doubles the instance count, so nesting depth alone is not a bound. The cap sits far above the kernel's component limit, so no compilable circuit is affected. |
+| Flattening is capped at 50,000 NAND instances and 2,000,000 signal bits | Each level that instantiates its child twice doubles the instance count, so nesting depth alone is not a bound; wide pins multiply node count by their width, so an instance cap alone no longer bounds memory. Both caps sit far above the kernel's component limit, so no compilable circuit is affected. |
 
 The CLI independently re-checks unit names before writing and refuses the whole
 run if any destination exists without `--force`, so a failed import never leaves
