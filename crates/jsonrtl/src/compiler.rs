@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CircuitDocument, ComponentType, Diagnostic, DiagnosticCode, DiagnosticSeverity, Kernel,
-    NormalizedCircuit, NormalizedComponent, PortDirection, SourceReference, ValidationReport,
-    VerilogIdentifier,
+    NormalizedCircuit, NormalizedComponent, NormalizedConnection, PortDirection, SourceReference,
+    ValidationReport, VerilogIdentifier,
     ir::{NormalizationFailure, normalize},
 };
 
@@ -244,10 +244,7 @@ fn emit_verilog(circuit: &NormalizedCircuit) -> Result<(String, SourceMap), Norm
     for component in circuit.components() {
         let output = connection(component, "Y", circuit.original_id())?;
         let expression = component_expression(component, circuit.original_id())?;
-        let line = emitter.push_line(&format!(
-            "assign {} = {expression};",
-            output.net_identifier()
-        ));
+        let line = emitter.push_line(&format!("assign {} = {expression};", output.expression()));
         emitter.map(
             SourceMapKind::ComponentAssignment,
             line,
@@ -277,8 +274,8 @@ fn component_expression(
     component: &NormalizedComponent,
     circuit_id: &str,
 ) -> Result<String, NormalizationFailure> {
-    let a = || connection(component, "A", circuit_id).map(|item| item.net_identifier().to_string());
-    let b = || connection(component, "B", circuit_id).map(|item| item.net_identifier().to_string());
+    let a = || connection(component, "A", circuit_id).map(NormalizedConnection::expression);
+    let b = || connection(component, "B", circuit_id).map(NormalizedConnection::expression);
     match component.component_type() {
         ComponentType::And => Ok(format!("{} & {}", a()?, b()?)),
         ComponentType::Or => Ok(format!("{} | {}", a()?, b()?)),
@@ -302,7 +299,7 @@ fn connection<'a>(
     component: &'a NormalizedComponent,
     logical_port: &str,
     circuit_id: &str,
-) -> Result<&'a crate::NormalizedConnection, NormalizationFailure> {
+) -> Result<&'a NormalizedConnection, NormalizationFailure> {
     component.connection(logical_port).ok_or_else(|| {
         component_failure(
             component,

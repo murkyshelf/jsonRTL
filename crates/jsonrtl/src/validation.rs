@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    Circuit, CircuitDocument, Component, ComponentType, Diagnostic, DiagnosticCode,
+    Circuit, CircuitDocument, Component, ComponentType, Connection, Diagnostic, DiagnosticCode,
     DiagnosticSeverity, KernelLimits, ModulePort, Net, PortDirection, SourceReference,
     ValidationReport, component_definition,
 };
@@ -43,7 +43,7 @@ impl Kernel {
         validate_references_and_catalog(document, &index, &mut diagnostics);
 
         let roles = build_electrical_roles(document, &index);
-        validate_electrical_roles(document, &roles, &mut diagnostics);
+        validate_electrical_roles(document, &index, &roles, &mut diagnostics);
 
         if index.duplicate_component_ids.is_empty() && index.duplicate_net_ids.is_empty() {
             validate_cycles(document, &index, &roles, &mut diagnostics);
@@ -302,7 +302,7 @@ fn validate_names(
         // V1 catalog entries have at most three ports. Inspect at most one extra
         // entry here so a typed model that bypassed the schema cannot drive
         // unbounded diagnostic allocation through a huge connection map.
-        for (logical_port, net_id) in component.connections.iter().take(4) {
+        for (logical_port, connection) in component.connections.iter().take(4) {
             validate_string_limit(
                 document,
                 logical_port,
@@ -312,7 +312,7 @@ fn validate_names(
             );
             validate_string_limit(
                 document,
-                net_id,
+                connection.net_id(),
                 component_source(document, component, &format!("connections.{logical_port}")),
                 limits,
                 diagnostics,
@@ -538,11 +538,94 @@ fn validate_width(
     }
 }
 
+/// True when this document's declared version permits sliced connections.
+fn slices_allowed(document: &CircuitDocument) -> bool {
+    document.schema_version.as_str() != "1.0"
+}
+
+/// Checks one connection's width against its net, sliced or whole.
+fn validate_connection_width(
+    document: &CircuitDocument,
+    component: &Component,
+    logical_port: &str,
+    connection: &Connection,
+    net: &Net,
+    field: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(slice) = connection.slice() else {
+        if component.width != net.width {
+            diagnostics.push(Diagnostic::new(
+                DiagnosticCode::WidthComponentNetMismatch,
+                DiagnosticSeverity::Error,
+                format!(
+                    "Component '{}' logical port '{}' width {} does not match net '{}' width {}.",
+                    component.id, logical_port, component.width, net.id, net.width
+                ),
+                component_source_with_net(document, component, field, &net.id),
+                vec![net_source(document, net, "width")],
+                Some("Use identical widths on every V1 gate connection.".into()),
+            ));
+        }
+        return;
+    };
+
+    // An inverted or overhanging range has no meaningful width, so report the
+    // range itself and stop; a width diagnostic would only be noise.
+    let Some(slice_width) = slice.width() else {
+        diagnostics.push(Diagnostic::new(
+            DiagnosticCode::SliceOutOfRange,
+            DiagnosticSeverity::Error,
+            format!(
+                "Component '{}' logical port '{}' slices net '{}' as [{}:{}], but the most-significant index must not be below the least-significant one.",
+                component.id, logical_port, net.id, slice.msb, slice.lsb
+            ),
+            component_source_with_net(document, component, field, &net.id),
+            vec![net_source(document, net, "width")],
+            Some("Give the slice an msb greater than or equal to its lsb.".into()),
+        ));
+        return;
+    };
+
+    if slice.msb >= net.width {
+        diagnostics.push(Diagnostic::new(
+            DiagnosticCode::SliceOutOfRange,
+            DiagnosticSeverity::Error,
+            format!(
+                "Component '{}' logical port '{}' slices bit {} of net '{}', which is only {} bits wide.",
+                component.id, logical_port, slice.msb, net.id, net.width
+            ),
+            component_source_with_net(document, component, field, &net.id),
+            vec![net_source(document, net, "width")],
+            Some(format!(
+                "Index bits 0 through {} of this net.",
+                net.width - 1
+            )),
+        ));
+        return;
+    }
+
+    if slice_width != component.width {
+        diagnostics.push(Diagnostic::new(
+            DiagnosticCode::WidthComponentNetMismatch,
+            DiagnosticSeverity::Error,
+            format!(
+                "Component '{}' logical port '{}' width {} does not match the {}-bit slice [{}:{}] of net '{}'.",
+                component.id, logical_port, component.width, slice_width, slice.msb, slice.lsb, net.id
+            ),
+            component_source_with_net(document, component, field, &net.id),
+            vec![net_source(document, net, "width")],
+            Some("Use identical widths on every V1 gate connection.".into()),
+        ));
+    }
+}
+
 fn validate_references_and_catalog(
     document: &CircuitDocument,
     index: &DocumentIndex<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let slices_allowed = slices_allowed(document);
     for port in &document.circuit.ports {
         if !index.all_net_ids.contains(port.net_id.as_str()) {
             diagnostics.push(Diagnostic::new(
@@ -591,7 +674,7 @@ fn validate_references_and_catalog(
 
         for logical_port in definition.ports {
             let field = format!("connections.{}", logical_port.name);
-            let Some(net_id) = component.connections.get(logical_port.name) else {
+            let Some(connection) = component.connections.get(logical_port.name) else {
                 diagnostics.push(Diagnostic::new(
                     DiagnosticCode::ComponentMissingConnection,
                     DiagnosticSeverity::Error,
@@ -608,8 +691,9 @@ fn validate_references_and_catalog(
                 ));
                 continue;
             };
+            let net_id = connection.net_id();
 
-            if !index.all_net_ids.contains(net_id.as_str()) {
+            if !index.all_net_ids.contains(net_id) {
                 diagnostics.push(Diagnostic::new(
                     DiagnosticCode::NetUnknownReference,
                     DiagnosticSeverity::Error,
@@ -621,20 +705,36 @@ fn validate_references_and_catalog(
                     Vec::new(),
                     Some("Connect the logical port to a declared net ID.".into()),
                 ));
-            } else if let Some(net) = index.unique_nets.get(net_id.as_str()) {
-                if component.width != net.width {
-                    diagnostics.push(Diagnostic::new(
-                        DiagnosticCode::WidthComponentNetMismatch,
-                        DiagnosticSeverity::Error,
-                        format!(
-                            "Component '{}' logical port '{}' width {} does not match net '{}' width {}.",
-                            component.id, logical_port.name, component.width, net.id, net.width
-                        ),
-                        component_source_with_net(document, component, &field, &net.id),
-                        vec![net_source(document, net, "width")],
-                        Some("Use identical widths on every V1 gate connection.".into()),
-                    ));
-                }
+            } else if let Some(net) = index.unique_nets.get(net_id) {
+                validate_connection_width(
+                    document,
+                    component,
+                    logical_port.name,
+                    connection,
+                    net,
+                    &field,
+                    diagnostics,
+                );
+            }
+
+            if connection.slice().is_some() && !slices_allowed {
+                diagnostics.push(Diagnostic::new(
+                    DiagnosticCode::SliceRequiresSchema11,
+                    DiagnosticSeverity::Error,
+                    format!(
+                        "Component '{}' logical port '{}' uses a bit slice, which requires schema version '{}'; this document declares '{}'.",
+                        component.id,
+                        logical_port.name,
+                        crate::SLICE_SCHEMA_VERSION,
+                        document.schema_version
+                    ),
+                    component_source(document, component, &field),
+                    Vec::new(),
+                    Some(format!(
+                        "Declare schemaVersion '{}' or connect the whole net.",
+                        crate::SLICE_SCHEMA_VERSION
+                    )),
+                ));
             }
         }
 
@@ -761,8 +861,57 @@ struct NetRoles {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Endpoint {
+    /// Half-open `[start, end)` bit range of the net this endpoint covers.
+    ///
+    /// Slices mean drive is resolved per bit — a bus merger legitimately emits
+    /// `assign d[0] = ...; assign d[1] = ...;` — but nets may be thousands of
+    /// bits wide, so ranges are compared as intervals and never expanded.
+    bits: (u32, u32),
     source: SourceReference,
     component_id: Option<String>,
+}
+
+impl Endpoint {
+    /// True when two endpoints share at least one bit.
+    const fn overlaps(&self, other: &Self) -> bool {
+        self.bits.0 < other.bits.1 && other.bits.0 < self.bits.1
+    }
+
+    const fn is_empty(&self) -> bool {
+        self.bits.0 >= self.bits.1
+    }
+}
+
+/// Merges sorted, possibly overlapping ranges into disjoint ascending ones.
+fn merge_ranges(mut ranges: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
+    ranges.retain(|(start, end)| start < end);
+    ranges.sort_unstable();
+    let mut merged: Vec<(u32, u32)> = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
+        match merged.last_mut() {
+            Some(last) if start <= last.1 => last.1 = last.1.max(end),
+            _ => merged.push((start, end)),
+        }
+    }
+    merged
+}
+
+/// The first sub-range of `range` that no range in `covered` includes.
+fn first_gap(range: (u32, u32), covered: &[(u32, u32)]) -> Option<(u32, u32)> {
+    let mut cursor = range.0;
+    for (start, end) in covered {
+        if *end <= cursor {
+            continue;
+        }
+        if *start > cursor {
+            return Some((cursor, (*start).min(range.1)));
+        }
+        cursor = *end;
+        if cursor >= range.1 {
+            return None;
+        }
+    }
+    (cursor < range.1).then_some((cursor, range.1))
 }
 
 fn build_electrical_roles<'a>(
@@ -779,10 +928,15 @@ fn build_electrical_roles<'a>(
         if index.duplicate_port_ids.contains(port.id.as_str()) {
             continue;
         }
+        let Some(net) = index.unique_nets.get(port.net_id.as_str()) else {
+            continue;
+        };
         let Some(net_roles) = roles.get_mut(port.net_id.as_str()) else {
             continue;
         };
+        // A module port always covers its whole net; only components slice.
         let endpoint = Endpoint {
+            bits: (0, net.width),
             source: port_source_with_net(document, port, "netId", &port.net_id),
             component_id: None,
         };
@@ -803,21 +957,31 @@ fn build_electrical_roles<'a>(
             continue;
         };
         for logical_port in definition.ports {
-            let Some(net_id) = component.connections.get(logical_port.name) else {
+            let Some(connection) = component.connections.get(logical_port.name) else {
                 continue;
             };
-            let Some(net_roles) = roles.get_mut(net_id.as_str()) else {
+            let Some(net) = index.unique_nets.get(connection.net_id()) else {
                 continue;
             };
+            let Some(net_roles) = roles.get_mut(connection.net_id()) else {
+                continue;
+            };
+            let bits = connection.bits(net.width);
             let endpoint = Endpoint {
+                bits: (bits.start, bits.end),
                 source: component_source_with_net(
                     document,
                     component,
                     &format!("connections.{}", logical_port.name),
-                    net_id,
+                    connection.net_id(),
                 ),
                 component_id: Some(component.id.clone()),
             };
+            // An out-of-range slice contributes nothing; SLICE_OUT_OF_RANGE
+            // already names it, and treating it as a driver would mask that.
+            if endpoint.is_empty() {
+                continue;
+            }
             match logical_port.direction {
                 PortDirection::Input => net_roles.consumers.push(endpoint),
                 PortDirection::Output => net_roles.drivers.push(endpoint),
@@ -834,21 +998,63 @@ fn build_electrical_roles<'a>(
     roles
 }
 
+/// Names a bit range for a diagnostic. A range covering a whole one-bit net is
+/// named without an index, so single-bit documents read exactly as they did
+/// before slices existed.
+fn range_label(net_id: &str, range: (u32, u32), net_width: u32) -> String {
+    if net_width == 1 || (range.0 == 0 && range.1 >= net_width) {
+        format!("Net '{net_id}'")
+    } else if range.1 - range.0 == 1 {
+        format!("Bit {} of net '{net_id}'", range.0)
+    } else {
+        format!("Bits [{}:{}] of net '{net_id}'", range.1 - 1, range.0)
+    }
+}
+
 fn validate_electrical_roles(
     document: &CircuitDocument,
+    index: &DocumentIndex<'_>,
     roles: &BTreeMap<&str, NetRoles>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for (net_id, net_roles) in roles {
+        let net_width = index.unique_nets.get(net_id).map_or(1, |net| net.width);
         let primary = source(document, None, Some(net_id), None, "connectivity");
-        if net_roles.drivers.len() > 1 {
+
+        // Two drivers only conflict where their bit ranges overlap, so a merger
+        // driving each bit of one net separately stays legal.
+        let mut conflicts: Vec<&Endpoint> = Vec::new();
+        let mut overlap: Option<(u32, u32)> = None;
+        for (position, driver) in net_roles.drivers.iter().enumerate() {
+            for other in &net_roles.drivers[position + 1..] {
+                if !driver.overlaps(other) {
+                    continue;
+                }
+                let shared = (
+                    driver.bits.0.max(other.bits.0),
+                    driver.bits.1.min(other.bits.1),
+                );
+                overlap = Some(overlap.map_or(shared, |(start, end): (u32, u32)| {
+                    (start.min(shared.0), end.max(shared.1))
+                }));
+                for endpoint in [driver, other] {
+                    if !conflicts.contains(&endpoint) {
+                        conflicts.push(endpoint);
+                    }
+                }
+            }
+        }
+        if let Some(range) = overlap {
             diagnostics.push(Diagnostic::new(
                 DiagnosticCode::NetMultipleDrivers,
                 DiagnosticSeverity::Error,
-                format!("Net '{net_id}' has {} drivers.", net_roles.drivers.len()),
+                format!(
+                    "{} has {} drivers.",
+                    range_label(net_id, range, net_width),
+                    conflicts.len()
+                ),
                 primary.clone(),
-                net_roles
-                    .drivers
+                conflicts
                     .iter()
                     .map(|endpoint| endpoint.source.clone())
                     .collect(),
@@ -856,11 +1062,31 @@ fn validate_electrical_roles(
             ));
         }
 
-        if net_roles.drivers.is_empty() && !net_roles.consumers.is_empty() {
+        // A consumed bit with no driver is an error even when other bits of the
+        // same net are driven.
+        let driven = merge_ranges(
+            net_roles
+                .drivers
+                .iter()
+                .map(|endpoint| endpoint.bits)
+                .collect(),
+        );
+        let mut undriven: Option<(u32, u32)> = None;
+        for consumer in &net_roles.consumers {
+            if let Some(gap) = first_gap(consumer.bits, &driven) {
+                undriven = Some(undriven.map_or(gap, |(start, end): (u32, u32)| {
+                    (start.min(gap.0), end.max(gap.1))
+                }));
+            }
+        }
+        if let Some(range) = undriven {
             diagnostics.push(Diagnostic::new(
                 DiagnosticCode::NetNoDriver,
                 DiagnosticSeverity::Error,
-                format!("Net '{net_id}' feeds consumers but has no driver."),
+                format!(
+                    "{} feeds consumers but has no driver.",
+                    range_label(net_id, range, net_width)
+                ),
                 primary.clone(),
                 net_roles
                     .consumers
@@ -871,6 +1097,8 @@ fn validate_electrical_roles(
             ));
         }
 
+        // The two warnings stay whole-net, so a wide net with one spare bit
+        // does not produce a diagnostic per bit.
         if net_roles.consumers.is_empty() {
             if net_roles.drivers.is_empty() {
                 diagnostics.push(Diagnostic::new(
@@ -918,23 +1146,24 @@ fn validate_cycles(
         .collect();
     let mut edge_nets: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
 
+    // An edge exists only where a driver and a consumer share bits, so a
+    // shifter that routes bit 0 of a net out and bit 1 back in is not a cycle.
     for (net_id, net_roles) in roles {
-        let drivers: BTreeSet<_> = net_roles
-            .drivers
-            .iter()
-            .filter_map(|endpoint| endpoint.component_id.as_deref())
-            .collect();
-        let consumers: BTreeSet<_> = net_roles
-            .consumers
-            .iter()
-            .filter_map(|endpoint| endpoint.component_id.as_deref())
-            .collect();
-        for driver in &drivers {
-            for consumer in &consumers {
-                if let Some(neighbors) = adjacency.get_mut(*driver) {
-                    neighbors.insert((*consumer).to_owned());
+        for driver in &net_roles.drivers {
+            let Some(driver_id) = driver.component_id.as_deref() else {
+                continue;
+            };
+            for consumer in &net_roles.consumers {
+                let Some(consumer_id) = consumer.component_id.as_deref() else {
+                    continue;
+                };
+                if !driver.overlaps(consumer) {
+                    continue;
+                }
+                if let Some(neighbors) = adjacency.get_mut(driver_id) {
+                    neighbors.insert(consumer_id.to_owned());
                     edge_nets
-                        .entry(((*driver).to_owned(), (*consumer).to_owned()))
+                        .entry((driver_id.to_owned(), consumer_id.to_owned()))
                         .or_default()
                         .insert((*net_id).to_owned());
                 }

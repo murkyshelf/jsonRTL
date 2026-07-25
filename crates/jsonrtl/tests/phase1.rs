@@ -116,7 +116,7 @@ fn unsupported_version_is_not_silently_reinterpreted() {
         error,
         ParseError::UnsupportedSchemaVersion {
             found: "2.0".to_owned(),
-            supported: "1.0",
+            supported: jsonrtl::SUPPORTED_SCHEMA_VERSIONS,
         }
     );
 }

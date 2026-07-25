@@ -135,12 +135,13 @@ impl NormalizedComponent {
     }
 }
 
-/// A resolved component-port-to-net relation.
+/// A resolved component-port-to-net relation, optionally a bit slice of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedConnection {
     logical_port: String,
     net_id: String,
     net_identifier: VerilogIdentifier,
+    slice: Option<(u32, u32)>,
 }
 
 impl NormalizedConnection {
@@ -157,6 +158,22 @@ impl NormalizedConnection {
     #[must_use]
     pub const fn net_identifier(&self) -> &VerilogIdentifier {
         &self.net_identifier
+    }
+
+    /// The inclusive `(msb, lsb)` bit range, or `None` for the whole net.
+    #[must_use]
+    pub const fn slice(&self) -> Option<(u32, u32)> {
+        self.slice
+    }
+
+    /// The Verilog expression naming this connection: `n`, `n[3]`, or `n[7:4]`.
+    #[must_use]
+    pub fn expression(&self) -> String {
+        match self.slice {
+            None => self.net_identifier.to_string(),
+            Some((msb, lsb)) if msb == lsb => format!("{}[{msb}]", self.net_identifier),
+            Some((msb, lsb)) => format!("{}[{msb}:{lsb}]", self.net_identifier),
+        }
     }
 }
 
@@ -268,7 +285,7 @@ pub(crate) fn normalize(
         };
         let mut connections = Vec::with_capacity(definition.ports.len());
         for logical_port in definition.ports {
-            let Some(net_id) = component.connections.get(logical_port.name) else {
+            let Some(connection) = component.connections.get(logical_port.name) else {
                 return Err(failure(
                     document,
                     Some(&component.id),
@@ -277,7 +294,8 @@ pub(crate) fn normalize(
                     &format!("connections.{}", logical_port.name),
                 ));
             };
-            let Some(net_identifier) = net_identifiers.get(net_id.as_str()) else {
+            let net_id = connection.net_id();
+            let Some(net_identifier) = net_identifiers.get(net_id) else {
                 return Err(failure(
                     document,
                     Some(&component.id),
@@ -288,8 +306,9 @@ pub(crate) fn normalize(
             };
             connections.push(NormalizedConnection {
                 logical_port: logical_port.name.to_owned(),
-                net_id: net_id.clone(),
+                net_id: net_id.to_owned(),
                 net_identifier: (*net_identifier).clone(),
+                slice: connection.slice().map(|slice| (slice.msb, slice.lsb)),
             });
         }
         let const_value = if component.component_type == ComponentType::Const {

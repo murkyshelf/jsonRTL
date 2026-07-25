@@ -100,8 +100,95 @@ pub enum ComponentType {
     Unknown,
 }
 
-/// Logical component port name to canonical net ID.
-pub type ConnectionMap = BTreeMap<String, String>;
+/// A contiguous bit range of one net, from schema v1.1.
+///
+/// `msb` and `lsb` are inclusive and index bits of the referenced net, so the
+/// slice is `msb - lsb + 1` bits wide. A single bit has `msb == lsb`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NetSlice {
+    pub net: String,
+    pub msb: u32,
+    pub lsb: u32,
+}
+
+impl NetSlice {
+    /// The number of bits the slice covers, or `None` when `lsb` exceeds `msb`.
+    #[must_use]
+    pub const fn width(&self) -> Option<u32> {
+        if self.lsb > self.msb {
+            None
+        } else {
+            Some(self.msb - self.lsb + 1)
+        }
+    }
+}
+
+/// What one logical component port is wired to.
+///
+/// Untagged so that every schema v1.0 document, in which a connection is just a
+/// net ID string, keeps parsing unchanged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Connection {
+    /// The whole net, whose width must equal the component width.
+    Whole(String),
+    /// A contiguous bit range of a net. Schema v1.1 and later.
+    Slice(NetSlice),
+}
+
+impl Connection {
+    /// The referenced net ID, whether or not the connection is sliced.
+    #[must_use]
+    pub fn net_id(&self) -> &str {
+        match self {
+            Self::Whole(net_id) => net_id,
+            Self::Slice(slice) => &slice.net,
+        }
+    }
+
+    /// The bit range, or `None` when the whole net is referenced.
+    #[must_use]
+    pub const fn slice(&self) -> Option<&NetSlice> {
+        match self {
+            Self::Whole(_) => None,
+            Self::Slice(slice) => Some(slice),
+        }
+    }
+
+    /// The bits of the net this connection covers, given the net's width.
+    ///
+    /// Returns an empty range for a slice outside the net, which the validator
+    /// reports separately as `SLICE_OUT_OF_RANGE`.
+    #[must_use]
+    pub fn bits(&self, net_width: u32) -> std::ops::Range<u32> {
+        match self {
+            Self::Whole(_) => 0..net_width,
+            Self::Slice(slice) => {
+                if slice.lsb > slice.msb || slice.msb >= net_width {
+                    0..0
+                } else {
+                    slice.lsb..slice.msb + 1
+                }
+            }
+        }
+    }
+}
+
+impl From<&str> for Connection {
+    fn from(net_id: &str) -> Self {
+        Self::Whole(net_id.to_owned())
+    }
+}
+
+impl From<String> for Connection {
+    fn from(net_id: String) -> Self {
+        Self::Whole(net_id)
+    }
+}
+
+/// Logical component port name to the net or net slice it is wired to.
+pub type ConnectionMap = BTreeMap<String, Connection>;
 
 /// Component parameters remain JSON values until catalog-aware semantic validation.
 pub type Parameters = BTreeMap<String, Value>;

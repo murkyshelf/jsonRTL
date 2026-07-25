@@ -11,10 +11,13 @@
   ],
   "properties": {
     "schemaVersion": {
-      "description": "Exact canonical document contract version.",
-      "const": "1.0",
+      "description": "Canonical document contract version. '1.1' adds sliced connections.",
+      "enum": [
+        "1.0",
+        "1.1"
+      ],
       "examples": [
-        "1.0"
+        "1.1"
       ]
     },
     "circuit": {
@@ -189,7 +192,7 @@
           "$ref": "#/$defs/width"
         },
         "connections": {
-          "description": "Logical component port name to net ID. Exact catalog ports are checked semantically.",
+          "description": "Logical component port name to a net ID or net slice. Exact catalog ports are checked semantically.",
           "type": "object",
           "maxProperties": 3,
           "propertyNames": {
@@ -198,13 +201,26 @@
             "maxLength": 128
           },
           "additionalProperties": {
-            "$ref": "#/$defs/stableId"
+            "$ref": "#/$defs/connection"
           },
           "examples": [
             {
               "A": "net-a",
               "B": "net-b",
               "Y": "net-y"
+            },
+            {
+              "A": "net-a",
+              "B": {
+                "net": "net-b",
+                "msb": 3,
+                "lsb": 3
+              },
+              "Y": {
+                "net": "net-y",
+                "msb": 7,
+                "lsb": 4
+              }
             }
           ]
         },
@@ -252,6 +268,56 @@
           "id": "net-y",
           "name": "y",
           "width": 1
+        }
+      ]
+    },
+    "netSlice": {
+      "description": "A contiguous, inclusive bit range of one net. Schema v1.1 and later.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "net",
+        "msb",
+        "lsb"
+      ],
+      "properties": {
+        "net": {
+          "$ref": "#/$defs/stableId"
+        },
+        "msb": {
+          "description": "Inclusive most-significant bit index.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "lsb": {
+          "description": "Inclusive least-significant bit index.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "examples": [
+        {
+          "net": "net-a",
+          "msb": 7,
+          "lsb": 4
+        },
+        {
+          "net": "net-a",
+          "msb": 3,
+          "lsb": 3
+        }
+      ]
+    },
+    "connection": {
+      "description": "A whole net (v1.0) or a contiguous bit slice of one (v1.1).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/stableId"
+        },
+        {
+          "$ref": "#/$defs/netSlice"
         }
       ]
     }

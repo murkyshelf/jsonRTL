@@ -45,6 +45,10 @@ pub enum DiagnosticCode {
     WidthExceedsLimit,
     WidthPortNetMismatch,
     WidthComponentNetMismatch,
+    SliceOutOfRange,
+    /// Renamed explicitly: the derived spelling would drop the version's dots.
+    #[serde(rename = "SLICE_REQUIRES_SCHEMA_1_1")]
+    SliceRequiresSchema11,
     ConstLiteralMalformed,
     ConstValueWidthMismatch,
     NetMultipleDrivers,
@@ -81,6 +85,8 @@ pub const DIAGNOSTIC_CODES: &[DiagnosticCode] = &[
     DiagnosticCode::WidthExceedsLimit,
     DiagnosticCode::WidthPortNetMismatch,
     DiagnosticCode::WidthComponentNetMismatch,
+    DiagnosticCode::SliceOutOfRange,
+    DiagnosticCode::SliceRequiresSchema11,
     DiagnosticCode::ConstLiteralMalformed,
     DiagnosticCode::ConstValueWidthMismatch,
     DiagnosticCode::NetMultipleDrivers,
@@ -121,6 +127,8 @@ impl DiagnosticCode {
             Self::WidthPortNetMismatch => "WIDTH_PORT_NET_MISMATCH",
             Self::WidthComponentNetMismatch => "WIDTH_COMPONENT_NET_MISMATCH",
             Self::ConstLiteralMalformed => "CONST_LITERAL_MALFORMED",
+            Self::SliceOutOfRange => "SLICE_OUT_OF_RANGE",
+            Self::SliceRequiresSchema11 => "SLICE_REQUIRES_SCHEMA_1_1",
             Self::ConstValueWidthMismatch => "CONST_VALUE_WIDTH_MISMATCH",
             Self::NetMultipleDrivers => "NET_MULTIPLE_DRIVERS",
             Self::NetNoDriver => "NET_NO_DRIVER",

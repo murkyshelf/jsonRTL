@@ -93,7 +93,7 @@ fn json_diagnostics_have_stable_machine_readable_fields() {
     assert_eq!(envelope["success"], false);
     assert_eq!(envelope["command"], "validate");
     assert_eq!(envelope["valid"], false);
-    assert_eq!(envelope["schemaVersion"], "1.0");
+    assert_eq!(envelope["schemaVersion"], jsonrtl::SUPPORTED_SCHEMA_VERSION);
     assert_eq!(envelope["compilerVersion"], env!("CARGO_PKG_VERSION"));
     assert!(envelope["diagnostics"].as_array().unwrap().len() > 1);
 }
@@ -161,7 +161,7 @@ fn json_diagnostics_for_valid_input() {
     assert_eq!(envelope["success"], true);
     assert_eq!(envelope["command"], "validate");
     assert_eq!(envelope["valid"], true);
-    assert_eq!(envelope["schemaVersion"], "1.0");
+    assert_eq!(envelope["schemaVersion"], jsonrtl::SUPPORTED_SCHEMA_VERSION);
     assert_eq!(envelope["compilerVersion"], env!("CARGO_PKG_VERSION"));
     let diags = envelope["diagnostics"].as_array().unwrap();
     for diagnostic in diags {
@@ -185,7 +185,7 @@ fn json_diagnostics_for_schema_invalid_input() {
     assert_eq!(envelope["stage"], "schema");
     assert_eq!(envelope["error"]["category"], "schema");
     assert!(!envelope["diagnostics"].as_array().unwrap().is_empty());
-    assert_eq!(envelope["schemaVersion"], "1.0");
+    assert_eq!(envelope["schemaVersion"], jsonrtl::SUPPORTED_SCHEMA_VERSION);
 }
 
 #[test]
@@ -349,7 +349,7 @@ fn json_diagnostics_for_compile_stdout() {
     assert_eq!(envelope["success"], true);
     assert_eq!(envelope["command"], "compile");
     assert_eq!(envelope["valid"], true);
-    assert_eq!(envelope["schemaVersion"], "1.0");
+    assert_eq!(envelope["schemaVersion"], jsonrtl::SUPPORTED_SCHEMA_VERSION);
 }
 
 fn binary() -> &'static str {

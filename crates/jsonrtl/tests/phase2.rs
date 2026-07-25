@@ -19,7 +19,7 @@ const SELF_LOOP: &str = include_str!("../../../tests/fixtures/semantic/self-loop
 #[test]
 fn diagnostic_registry_is_complete_unique_and_documented() {
     const DOCUMENTATION: &str = include_str!("../../../docs/diagnostics.md");
-    assert_eq!(DIAGNOSTIC_CODES.len(), 32);
+    assert_eq!(DIAGNOSTIC_CODES.len(), 34);
     let mut spellings = BTreeSet::new();
     for code in DIAGNOSTIC_CODES {
         assert!(spellings.insert(code.as_str()), "duplicate code {code}");
@@ -680,7 +680,7 @@ fn generated_typed_models_are_panic_safe_and_permutation_invariant() {
             3 => {
                 document.circuit.components[0]
                     .connections
-                    .insert("A".into(), format!("missing-{case}"));
+                    .insert("A".into(), format!("missing-{case}").into());
             }
             4 => document.circuit.nets.push(Net {
                 id: format!("unused-{case}"),

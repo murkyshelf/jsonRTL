@@ -26,14 +26,22 @@ pub use ir::{
 };
 pub use limits::KernelLimits;
 pub use model::{
-    Circuit, CircuitDocument, Component, ComponentType, ConnectionMap, EditorMetadata, ModulePort,
-    Net, Parameters, PortDirection, SchemaVersion,
+    Circuit, CircuitDocument, Component, ComponentType, Connection, ConnectionMap, EditorMetadata,
+    ModulePort, Net, NetSlice, Parameters, PortDirection, SchemaVersion,
 };
 pub use parser::ParseError;
 pub use validation::Kernel;
 
-/// The only canonical document version implemented by this release.
-pub const SUPPORTED_SCHEMA_VERSION: &str = "1.0";
+/// The canonical document version this release emits.
+///
+/// v1.1 adds sliced connections; see [`SUPPORTED_SCHEMA_VERSIONS`].
+pub const SUPPORTED_SCHEMA_VERSION: &str = "1.1";
+
+/// Every canonical document version this release accepts, oldest first.
+pub const SUPPORTED_SCHEMA_VERSIONS: &[&str] = &["1.0", "1.1"];
+
+/// The first version in which a connection may reference a bit slice.
+pub const SLICE_SCHEMA_VERSION: &str = "1.1";
 
 /// Semantic version of the jsonrtl library.
 pub const KERNEL_VERSION: &str = env!("CARGO_PKG_VERSION");

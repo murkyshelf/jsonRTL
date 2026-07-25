@@ -96,7 +96,10 @@ impl Builder {
             name: id,
             component_type,
             width: WIDTH,
-            connections: connections.into_iter().collect(),
+            connections: connections
+                .into_iter()
+                .map(|(port, net)| (port, net.into()))
+                .collect(),
             parameters: BTreeMap::new(),
         });
     }
@@ -213,7 +216,12 @@ pub fn lower(circuit_name: &str, flat: &FlatNetlist) -> CircuitDocument {
     let driven: BTreeSet<String> = builder
         .components
         .iter()
-        .filter_map(|component| component.connections.get("Y").cloned())
+        .filter_map(|component| {
+            component
+                .connections
+                .get("Y")
+                .map(|c| c.net_id().to_string())
+        })
         .collect();
 
     let mut used_names = BTreeSet::new();
@@ -242,8 +250,8 @@ pub fn lower(circuit_name: &str, flat: &FlatNetlist) -> CircuitDocument {
                 component_type: ComponentType::Buffer,
                 width: WIDTH,
                 connections: BTreeMap::from([
-                    ("A".to_string(), source),
-                    ("Y".to_string(), buffered.clone()),
+                    ("A".to_string(), source.into()),
+                    ("Y".to_string(), buffered.clone().into()),
                 ]),
                 parameters: BTreeMap::new(),
             });

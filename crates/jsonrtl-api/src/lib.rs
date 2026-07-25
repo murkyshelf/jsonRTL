@@ -380,7 +380,10 @@ fn classify_parse_error(error: &ParseError) -> (StatusCode, &'static str, String
         ParseError::UnsupportedSchemaVersion { found, supported } => (
             StatusCode::BAD_REQUEST,
             "UNSUPPORTED_VERSION",
-            format!("Unsupported schema version '{found}'; supported version is '{supported}'."),
+            format!(
+                "Unsupported schema version '{found}'; supported versions are {}.",
+                supported.join(", ")
+            ),
         ),
         ParseError::Schema { .. } => (
             StatusCode::BAD_REQUEST,

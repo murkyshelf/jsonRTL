@@ -61,9 +61,9 @@ pub fn lower(chip_name: &str, flat: &FlatNetlist) -> CircuitDocument {
             component_type: ComponentType::Nand,
             width: WIDTH,
             connections: BTreeMap::from([
-                ("A".to_string(), net_id(nand.a)),
-                ("B".to_string(), net_id(nand.b)),
-                ("Y".to_string(), net_id(nand.y)),
+                ("A".to_string(), net_id(nand.a).into()),
+                ("B".to_string(), net_id(nand.b).into()),
+                ("Y".to_string(), net_id(nand.y).into()),
             ]),
             parameters: BTreeMap::new(),
         })
@@ -104,8 +104,8 @@ pub fn lower(chip_name: &str, flat: &FlatNetlist) -> CircuitDocument {
                 component_type: ComponentType::Buffer,
                 width: WIDTH,
                 connections: BTreeMap::from([
-                    ("A".to_string(), net_id(pin.net)),
-                    ("Y".to_string(), net_id(buffered)),
+                    ("A".to_string(), net_id(pin.net).into()),
+                    ("Y".to_string(), net_id(buffered).into()),
                 ]),
                 parameters: BTreeMap::new(),
             });

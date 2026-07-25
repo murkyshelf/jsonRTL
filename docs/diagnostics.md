@@ -83,6 +83,8 @@ info never block future compilation.
 | `WIDTH_EXCEEDS_LIMIT` | error | A port, component, or net exceeds `KernelLimits.max_width`. | Width is 4097 under default limits. | Reduce width or change trusted limits. |
 | `WIDTH_PORT_NET_MISMATCH` | error | A module port width differs from its referenced net width. | 8-bit port connects to 1-bit net. | Make widths identical. |
 | `WIDTH_COMPONENT_NET_MISMATCH` | error | A recognized component port's net width differs from component width. | 8-bit XOR input uses a 4-bit net. | Make all V1 gate connection widths identical. |
+| `SLICE_OUT_OF_RANGE` | error | A connection slices a bit outside its net, or an `msb` below its `lsb`. | `{"net":"n","msb":8,"lsb":8}` on an 8-bit net. | Index bits `0`..`width-1`, with `msb >= lsb`. |
+| `SLICE_REQUIRES_SCHEMA_1_1` | error | A sliced connection appears in a document declaring `schemaVersion` `1.0`. | A `1.0` document uses `{"net":"n","msb":3,"lsb":0}`. | Declare `1.1`, or connect the whole net. |
 | `CONST_LITERAL_MALFORMED` | error | CONST `value` is not a non-empty string of only `0`/`1`. | `"10x1"` or numeric `3`. | Use an exact binary string. |
 | `CONST_VALUE_WIDTH_MISMATCH` | error | A valid binary CONST literal does not contain exactly `width` digits. | `"11"` at width 4. | Include one digit per bit, including leading zeroes. |
 | `NET_MULTIPLE_DRIVERS` | error | More than one external input/component output drives a net. | Input and CONST both drive `net-a`. | Leave exactly one driver. |

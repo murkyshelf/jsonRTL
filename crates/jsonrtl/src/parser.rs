@@ -5,7 +5,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::{
-    CIRCUIT_V1_SCHEMA, CircuitDocument, KernelLimits, LimitDiagnostic, SUPPORTED_SCHEMA_VERSION,
+    CIRCUIT_V1_SCHEMA, CircuitDocument, KernelLimits, LimitDiagnostic, SUPPORTED_SCHEMA_VERSIONS,
     SchemaDiagnostic,
 };
 
@@ -24,13 +24,13 @@ pub enum ParseError {
         column: usize,
     },
 
-    #[error("unsupported schema version '{found}'; supported version is '{supported}'")]
+    #[error("unsupported schema version '{found}'; supported versions are {}", supported.join(", "))]
     UnsupportedSchemaVersion {
         found: String,
-        supported: &'static str,
+        supported: &'static [&'static str],
     },
 
-    #[error("document does not satisfy canonical schema v1.0")]
+    #[error("document does not satisfy the canonical circuit schema")]
     Schema { diagnostics: Vec<SchemaDiagnostic> },
 
     #[error("document exceeds configured kernel limits")]
@@ -66,10 +66,10 @@ impl CircuitDocument {
             })?;
 
         if let Some(version) = value.get("schemaVersion").and_then(Value::as_str) {
-            if version != SUPPORTED_SCHEMA_VERSION {
+            if !SUPPORTED_SCHEMA_VERSIONS.contains(&version) {
                 return Err(ParseError::UnsupportedSchemaVersion {
                     found: version.to_owned(),
-                    supported: SUPPORTED_SCHEMA_VERSION,
+                    supported: SUPPORTED_SCHEMA_VERSIONS,
                 });
             }
         }
@@ -241,7 +241,7 @@ fn limit_diagnostics(document: &CircuitDocument, limits: &KernelLimits) -> Vec<L
             limits.max_parameters_per_component,
             "component parameters",
         );
-        for (port_name, net_id) in &component.connections {
+        for (port_name, connection) in &component.connections {
             check_string(
                 &mut diagnostics,
                 &format!("/circuit/components/{index}/connections/{port_name}"),
@@ -251,7 +251,7 @@ fn limit_diagnostics(document: &CircuitDocument, limits: &KernelLimits) -> Vec<L
             check_string(
                 &mut diagnostics,
                 &format!("/circuit/components/{index}/connections/{port_name}"),
-                net_id,
+                connection.net_id(),
                 limits.max_string_length,
             );
         }
