@@ -116,6 +116,21 @@ silently skipped:
   `BUS-*`, merge/split (`1-4BIT`, …), `7-SEGMENT` / displays, `ROM` / memory;
 - combinational cycles or missing/multiple drivers (surfaced by the kernel).
 
+## Untrusted-input rules
+
+Project files are untrusted. The profile enforces these before doing any work:
+
+| Rule | Why |
+| --- | --- |
+| A chip name must be a single ordinary path component | Names are joined onto both the `Chips/` input directory and the output directory. `..`, `a/b`, absolute paths, and Windows drive/separator forms are rejected so conversion can never read or write outside the directories it was given. |
+| Chip names must be unique | A name listed twice in `AllCustomChipNames` would otherwise collide on output. |
+| Boundary-pin ids and sub-chip instance ids must be distinct within a chip | A shared id makes a wire resolve to the wrong endpoint, silently mis-wiring the circuit. |
+| Flattening is capped at 50,000 NAND instances | Each level that instantiates its child twice doubles the instance count, so nesting depth alone is not a bound. The cap sits far above the kernel's component limit, so no compilable circuit is affected. |
+
+The CLI independently re-checks unit names before writing and refuses the whole
+run if any destination exists without `--force`, so a failed import never leaves
+a partial set of files behind.
+
 ## Adding a profile
 
 1. Add a module under `crates/jsonrtl-profiles/src/` implementing `Profile`.

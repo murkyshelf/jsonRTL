@@ -14,6 +14,13 @@ use crate::{
 /// Guards against pathological or cyclic chip nesting.
 const MAX_DEPTH: usize = 256;
 
+/// Guards against exponential inlining. Nesting is bounded by [`MAX_DEPTH`], but
+/// a chip that instantiates its child twice doubles the instance count per
+/// level, so depth alone is not a bound. This cap sits far above the kernel's
+/// own component limit, so no compilable circuit is ever rejected by it, while
+/// a runaway project fails fast instead of exhausting memory.
+const MAX_INSTANCES: usize = 50_000;
+
 /// The built-in NAND primitive's fixed pin ids.
 const NAND_IN_A: i64 = 0;
 const NAND_IN_B: i64 = 1;
@@ -134,12 +141,21 @@ impl Elaborator<'_> {
                 detail: format!("chip nesting exceeds depth limit {MAX_DEPTH}"),
             });
         }
+        check_ids_unique(chip, chip_name)?;
 
         // Endpoint nodes for pins owned by this chip's sub-chips.
         let mut sub_nodes: BTreeMap<(i64, i64), usize> = BTreeMap::new();
         let project = self.project;
         for sub in &chip.sub_chips {
             if sub.name == "NAND" {
+                if self.nands.len() >= MAX_INSTANCES {
+                    return Err(ProfileError::Limit {
+                        chip: chip_name.to_string(),
+                        detail: format!(
+                            "flattening exceeds {MAX_INSTANCES} NAND instances; the chip hierarchy expands too far to compile"
+                        ),
+                    });
+                }
                 let a = self.uf.make();
                 let b = self.uf.make();
                 let y = self.uf.make();
@@ -203,6 +219,38 @@ fn resolve(
             addr.pin_owner_id, addr.pin_id
         ),
     })
+}
+
+/// Rejects a chip whose boundary-pin ids and sub-chip instance ids are not all
+/// distinct.
+///
+/// `resolve` looks an endpoint's owner up as a boundary pin before treating it
+/// as a sub-chip pin, so an id used for both silently resolves every wire on
+/// that sub-chip to the boundary pin instead — mis-wiring the circuit. Two
+/// sub-chips sharing an instance id would likewise overwrite each other's
+/// endpoints. Both are rejected here rather than mis-converted.
+fn check_ids_unique(chip: &ChipDef, chip_name: &str) -> Result<(), ProfileError> {
+    let mut owners: BTreeMap<i64, &'static str> = BTreeMap::new();
+    for pin in chip.input_pins.iter().chain(chip.output_pins.iter()) {
+        if let Some(previous) = owners.insert(pin.id, "boundary pin") {
+            return Err(ProfileError::Structure {
+                chip: chip_name.to_string(),
+                detail: format!("id {} is used by more than one {previous}", pin.id),
+            });
+        }
+    }
+    for sub in &chip.sub_chips {
+        if let Some(previous) = owners.insert(sub.id, "sub-chip") {
+            return Err(ProfileError::Structure {
+                chip: chip_name.to_string(),
+                detail: format!(
+                    "sub-chip instance id {} collides with an existing {previous} id",
+                    sub.id
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn check_single_bit(chip: &ChipDef, chip_name: &str) -> Result<(), ProfileError> {
@@ -302,6 +350,130 @@ mod tests {
         assert_eq!(flat.inputs.len(), 3, "A, B, cin");
         assert_eq!(flat.outputs.len(), 2, "carry, out");
         assert!(!flat.nands.is_empty());
+    }
+
+    fn pin(name: &str, id: i64) -> crate::dls::model::PinDef {
+        crate::dls::model::PinDef {
+            name: name.into(),
+            id,
+            bit_count: 1,
+        }
+    }
+
+    fn wire(source: (i64, i64), target: (i64, i64)) -> crate::dls::model::Wire {
+        crate::dls::model::Wire {
+            source: PinAddress {
+                pin_id: source.1,
+                pin_owner_id: source.0,
+            },
+            target: PinAddress {
+                pin_id: target.1,
+                pin_owner_id: target.0,
+            },
+        }
+    }
+
+    #[test]
+    fn rejects_sub_chip_id_colliding_with_a_boundary_pin_id() {
+        // Regression: `resolve` matched boundary pins first, so a sub-chip whose
+        // instance id equalled a pin id had all of its wires silently attached
+        // to that pin — surfacing later as misleading NET_NO_DRIVER errors.
+        let chip = ChipDef {
+            name: "C".into(),
+            input_pins: vec![pin("a", 100)],
+            output_pins: vec![pin("y", 200)],
+            // Instance id 100 collides with input pin id 100.
+            sub_chips: vec![crate::dls::model::SubChip {
+                name: "NAND".into(),
+                id: 100,
+            }],
+            wires: vec![
+                wire((100, 0), (100, 0)),
+                wire((100, 0), (100, 1)),
+                wire((100, 2), (200, 0)),
+            ],
+        };
+        let project = DlsProject {
+            name: "p".into(),
+            chip_names: vec!["C".into()],
+            chips: BTreeMap::from([("C".to_string(), chip)]),
+        };
+
+        let error = elaborate(&project, "C").unwrap_err();
+        match error {
+            ProfileError::Structure { chip, detail } => {
+                assert_eq!(chip, "C");
+                assert!(detail.contains("collides"), "{detail}");
+            }
+            other => panic!("expected Structure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_hierarchies_that_expand_past_the_instance_cap() {
+        // Regression: each level instantiating its child twice doubles the
+        // instance count, so a depth-20 chain built 2^20 NANDs (~2 GB) before
+        // the kernel's own limits could reject it.
+        const DEPTH: i64 = 20;
+        let mut chips = BTreeMap::new();
+        chips.insert(
+            "C0".to_string(),
+            ChipDef {
+                name: "C0".into(),
+                input_pins: vec![pin("a", 1), pin("b", 2)],
+                output_pins: vec![pin("y", 3)],
+                sub_chips: vec![crate::dls::model::SubChip {
+                    name: "NAND".into(),
+                    id: 4,
+                }],
+                wires: vec![
+                    wire((1, 0), (4, 0)),
+                    wire((2, 0), (4, 1)),
+                    wire((4, 2), (3, 0)),
+                ],
+            },
+        );
+        for level in 1..=DEPTH {
+            let child = format!("C{}", level - 1);
+            chips.insert(
+                format!("C{level}"),
+                ChipDef {
+                    name: format!("C{level}"),
+                    input_pins: vec![pin("a", 1), pin("b", 2)],
+                    output_pins: vec![pin("y", 3)],
+                    sub_chips: vec![
+                        crate::dls::model::SubChip {
+                            name: child.clone(),
+                            id: 10,
+                        },
+                        crate::dls::model::SubChip {
+                            name: child,
+                            id: 11,
+                        },
+                    ],
+                    wires: vec![
+                        wire((1, 0), (10, 1)),
+                        wire((2, 0), (10, 2)),
+                        wire((10, 3), (11, 1)),
+                        wire((2, 0), (11, 2)),
+                        wire((11, 3), (3, 0)),
+                    ],
+                },
+            );
+        }
+        let project = DlsProject {
+            name: "blowup".into(),
+            chip_names: vec![format!("C{DEPTH}")],
+            chips,
+        };
+
+        let error = elaborate(&project, &format!("C{DEPTH}")).unwrap_err();
+        match error {
+            ProfileError::Limit { detail, .. } => {
+                assert!(detail.contains("NAND instances"), "{detail}")
+            }
+            other => panic!("expected Limit, got {other:?}"),
+        }
     }
 
     #[test]

@@ -115,6 +115,70 @@ fn import_json_diagnostics_list_units() {
     assert!(units.iter().any(|unit| unit == "AND"));
 }
 
+#[test]
+fn import_refuses_a_project_whose_chip_name_escapes_the_output_directory() {
+    // Regression: a chip named "../escaped" wrote its Verilog one level above
+    // --out and still exited 0 reporting success.
+    let directory = TempDirectory::new();
+    let project = directory.path().join("proj");
+    let out = directory.path().join("out");
+    fs::create_dir_all(project.join("Chips")).unwrap();
+    fs::create_dir_all(&out).unwrap();
+    fs::write(
+        project.join("ProjectDescription.json"),
+        r#"{"ProjectName":"trav","AllCustomChipNames":["../escaped"]}"#,
+    )
+    .unwrap();
+
+    let output = run([
+        "import",
+        project.to_str().unwrap(),
+        "--out",
+        out.to_str().unwrap(),
+    ]);
+
+    assert_ne!(output.status.code(), Some(0), "traversal must not succeed");
+    assert!(
+        !directory.path().join("escaped.v").exists(),
+        "wrote outside the output directory"
+    );
+    assert_eq!(
+        fs::read_dir(&out).unwrap().count(),
+        0,
+        "out must stay empty"
+    );
+}
+
+#[test]
+fn import_writes_nothing_when_any_destination_already_exists() {
+    // Regression: files were written one at a time, so a mid-loop failure left
+    // the units compiled before it on disk.
+    let directory = TempDirectory::new();
+    let blocker = directory.path().join("AND.v");
+    fs::write(&blocker, "sentinel\n").unwrap();
+
+    let output = run([
+        "import",
+        dls_project("test").to_str().unwrap(),
+        "--out",
+        directory.path().to_str().unwrap(),
+    ]);
+
+    assert_eq!(output.status.code(), Some(3));
+    assert!(stderr(&output).contains("--force"));
+    assert_eq!(fs::read_to_string(&blocker).unwrap(), "sentinel\n");
+    // No other unit may have been written before the failure.
+    let written: Vec<String> = fs::read_dir(directory.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        written,
+        vec!["AND.v".to_string()],
+        "partial output: {written:?}"
+    );
+}
+
 fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_jsonrtl")
 }

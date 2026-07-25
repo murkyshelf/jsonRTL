@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use serde::Deserialize;
 
-use crate::ProfileError;
+use crate::{ProfileError, is_safe_unit_name};
 
 /// A loaded DLS project: its name and every custom chip, keyed by chip name.
 #[derive(Debug, Clone, PartialEq)]
@@ -91,6 +91,26 @@ pub fn load_project(dir: &Path) -> Result<DlsProject, ProfileError> {
             message: error.to_string(),
         })?;
 
+    // Chip names come from an untrusted file and are joined onto both input and
+    // output directories, so they are validated before any path is built.
+    let mut seen: BTreeMap<&str, ()> = BTreeMap::new();
+    for chip_name in &description.all_custom_chip_names {
+        if !is_safe_unit_name(chip_name) {
+            return Err(ProfileError::Structure {
+                chip: chip_name.clone(),
+                detail:
+                    "chip name is not a single ordinary path component; it could escape the project directory"
+                        .into(),
+            });
+        }
+        if seen.insert(chip_name.as_str(), ()).is_some() {
+            return Err(ProfileError::Structure {
+                chip: chip_name.clone(),
+                detail: "chip name is listed more than once in AllCustomChipNames".into(),
+            });
+        }
+    }
+
     let mut chips = BTreeMap::new();
     for chip_name in &description.all_custom_chip_names {
         let chip_path = dir.join("Chips").join(format!("{chip_name}.json"));
@@ -128,6 +148,56 @@ mod tests {
         assert_eq!(project.name, "test");
         assert_eq!(project.chips.len(), 5);
         assert!(project.chips.contains_key("1-bit adder"));
+    }
+
+    /// Writes a throwaway project whose description lists `names`.
+    fn project_listing(names: &str) -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "jsonrtl-dls-model-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(dir.join("Chips")).unwrap();
+        std::fs::write(
+            dir.join("ProjectDescription.json"),
+            format!("{{\"ProjectName\":\"p\",\"AllCustomChipNames\":{names}}}"),
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn rejects_chip_names_that_escape_the_project_directory() {
+        // Regression: a traversing name was joined straight onto Chips/ and the
+        // output directory, letting a project read and write outside both.
+        let dir = project_listing(r#"["../escaped"]"#);
+        let error = load_project(&dir).unwrap_err();
+        match error {
+            ProfileError::Structure { chip, detail } => {
+                assert_eq!(chip, "../escaped");
+                assert!(detail.contains("escape"), "{detail}");
+            }
+            other => panic!("expected Structure, got {other:?}"),
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn rejects_duplicate_chip_names() {
+        // Regression: duplicates surfaced later as a misleading
+        // "file already exists; pass --force" i/o error.
+        let dir = project_listing(r#"["F","F"]"#);
+        let error = load_project(&dir).unwrap_err();
+        match error {
+            ProfileError::Structure { chip, detail } => {
+                assert_eq!(chip, "F");
+                assert!(detail.contains("more than once"), "{detail}");
+            }
+            other => panic!("expected Structure, got {other:?}"),
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

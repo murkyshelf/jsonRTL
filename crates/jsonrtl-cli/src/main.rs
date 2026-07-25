@@ -11,7 +11,9 @@ use jsonrtl::{
     CIRCUIT_V1_SCHEMA, CircuitDocument, CompileOptions, Diagnostic, DiagnosticCode, Kernel,
     ParseError, SUPPORTED_SCHEMA_VERSION, ValidationReport,
 };
-use jsonrtl_profiles::{NamedCircuit, Profile, ProfileError, detect_profile, profile_by_id};
+use jsonrtl_profiles::{
+    NamedCircuit, Profile, ProfileError, detect_profile, is_safe_unit_name, profile_by_id,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -283,6 +285,60 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         outputs.push((named.name.as_str(), verilog));
     }
 
+    // Unit names become file names. A profile is responsible for its own input,
+    // but this boundary owns what gets written, so names are checked here too
+    // before any path is built from them.
+    for named in &selected {
+        if !is_safe_unit_name(&named.name) {
+            let failure = CliFailure {
+                stage: "output",
+                category: "unsafe_unit_name",
+                message: format!(
+                    "unit name '{}' is not a valid file name; refusing to write outside the target directory",
+                    named.name
+                ),
+                diagnostics: Value::Array(Vec::new()),
+                exit_code: EXIT_INVALID,
+            };
+            render_failure(format, &failure);
+            return Err(EXIT_INVALID);
+        }
+    }
+
+    // Refuse the whole run if any destination already exists, so a partial set
+    // of files is never left behind by a mid-loop failure.
+    if !arguments.force {
+        let mut destinations: Vec<PathBuf> = Vec::new();
+        if let Some(dir) = &arguments.emit_canonical {
+            destinations.extend(
+                selected
+                    .iter()
+                    .map(|named| dir.join(format!("{}.json", named.name))),
+            );
+        }
+        if let Some(out) = &arguments.out {
+            destinations.extend(
+                selected
+                    .iter()
+                    .map(|named| out.join(format!("{}.v", named.name))),
+            );
+        }
+        if let Some(existing) = destinations.iter().find(|path| path.exists()) {
+            let failure = CliFailure {
+                stage: "output",
+                category: "output_exists",
+                message: format!(
+                    "refusing to overwrite '{}'; pass --force to replace it",
+                    existing.display()
+                ),
+                diagnostics: Value::Array(Vec::new()),
+                exit_code: EXIT_IO,
+            };
+            render_failure(format, &failure);
+            return Err(EXIT_IO);
+        }
+    }
+
     // Optionally emit the intermediate canonical JSON.
     if let Some(dir) = &arguments.emit_canonical {
         fs::create_dir_all(dir).map_err(|error| {
@@ -371,6 +427,7 @@ fn profile_failure(error: ProfileError) -> CliFailure {
         ProfileError::Parse { .. } => ("malformed_input", EXIT_INVALID),
         ProfileError::Unsupported { .. } => ("unsupported", EXIT_INVALID),
         ProfileError::Structure { .. } => ("structure", EXIT_INVALID),
+        ProfileError::Limit { .. } => ("resource_limit", EXIT_INVALID),
     };
     CliFailure {
         stage: "import",

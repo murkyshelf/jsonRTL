@@ -53,6 +53,34 @@ pub enum ProfileError {
     /// excessive depth, missing/duplicate driver, ...).
     #[error("structural error in chip '{chip}': {detail}")]
     Structure { chip: String, detail: String },
+
+    /// Conversion would exceed a profile resource bound. Reported before the
+    /// work is performed so a hostile or runaway project cannot exhaust memory.
+    #[error("resource limit exceeded in chip '{chip}': {detail}")]
+    Limit { chip: String, detail: String },
+}
+
+/// Returns true when `name` is safe to use as a single file-name component.
+///
+/// Unit names come from untrusted project files and are joined onto both input
+/// and output directories. A name is accepted only when it is exactly one
+/// ordinary path component, so `..`, `a/b`, absolute paths, and Windows drive
+/// or separator forms can never escape the directory they are joined to.
+#[must_use]
+pub fn is_safe_unit_name(name: &str) -> bool {
+    if name.is_empty()
+        || name.contains('\\')
+        || name.contains(':')
+        || name.contains('\0')
+        || name.contains('/')
+    {
+        return false;
+    }
+    let mut components = std::path::Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(part)), None) => part == std::ffi::OsStr::new(name),
+        _ => false,
+    }
 }
 
 /// A converter from one foreign project format to canonical circuit documents.
@@ -99,6 +127,34 @@ mod tests {
     fn profile_by_id_finds_dls() {
         assert!(profile_by_id("dls").is_some());
         assert!(profile_by_id("nope").is_none());
+    }
+
+    #[test]
+    fn unit_names_that_escape_a_directory_are_rejected() {
+        // Ordinary DLS chip names stay usable.
+        assert!(is_safe_unit_name("AND"));
+        assert!(is_safe_unit_name("1-bit adder"));
+        assert!(is_safe_unit_name("chip.v2"));
+
+        // Anything that could escape the directory it is joined to.
+        for hostile in [
+            "",
+            ".",
+            "..",
+            "../escaped",
+            "../../etc/passwd",
+            "a/b",
+            "/absolute",
+            "sub/../../x",
+            "C:\\windows",
+            "back\\slash",
+            "nul\0byte",
+        ] {
+            assert!(
+                !is_safe_unit_name(hostile),
+                "accepted hostile name {hostile:?}"
+            );
+        }
     }
 
     #[test]
