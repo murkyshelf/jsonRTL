@@ -587,6 +587,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrtl"
+version = "0.1.0"
+dependencies = [
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "jsonrtl-api"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http-body-util",
+ "jsonrtl",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "jsonrtl-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jsonrtl",
+ "jsonrtl-profiles",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "jsonrtl-profiles"
+version = "0.1.0"
+dependencies = [
+ "jsonrtl",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "jsonschema"
 version = "0.48.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -655,54 +703,6 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
-
-[[package]]
-name = "logic-kernel"
-version = "0.1.0"
-dependencies = [
- "jsonschema",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "logic-kernel-api"
-version = "0.1.0"
-dependencies = [
- "axum",
- "http-body-util",
- "logic-kernel",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "logic-kernel-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "logic-kernel",
- "logic-kernel-profiles",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "logic-kernel-profiles"
-version = "0.1.0"
-dependencies = [
- "logic-kernel",
- "serde",
- "serde_json",
- "thiserror",
-]
 
 [[package]]
 name = "matchers"

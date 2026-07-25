@@ -1,4 +1,4 @@
-# `logic-kernel` CLI Reference
+# `jsonrtl` CLI Reference
 
 ## Commands
 
@@ -56,13 +56,13 @@ with code `2`; unreadable inputs or unwritable outputs exit with code `3`.
 
 ```sh
 # Import a DLS project: one <ChipName>.v per chip, mirroring the project.
-logic-kernel import profiles/dls/example --out build/verilog
+jsonrtl import profiles/dls/example --out build/verilog
 
 # Print a single chip to stdout.
-logic-kernel import profiles/dls/example --chip AND --stdout
+jsonrtl import profiles/dls/example --chip AND --stdout
 
 # Also emit the canonical JSON handed to the compiler.
-logic-kernel import profiles/dls/example --out build/v --emit-canonical build/canon
+jsonrtl import profiles/dls/example --out build/v --emit-canonical build/canon
 ```
 
 ## Overwrite Policy
@@ -88,20 +88,20 @@ error path.
 
 ```sh
 # Validate a circuit
-logic-kernel validate half-adder.json
+jsonrtl validate half-adder.json
 
 # Validate with JSON diagnostics
-logic-kernel --diagnostics json validate half-adder.json
+jsonrtl --diagnostics json validate half-adder.json
 
 # Compile to stdout
-logic-kernel compile half-adder.json --stdout > half-adder.v
+jsonrtl compile half-adder.json --stdout > half-adder.v
 
 # Compile to file (refuses if file exists)
-logic-kernel compile half-adder.json --output half-adder.v
+jsonrtl compile half-adder.json --output half-adder.v
 
 # Compile to file (force overwrite)
-logic-kernel compile half-adder.json --output half-adder.v --force
+jsonrtl compile half-adder.json --output half-adder.v --force
 
 # Print the canonical schema
-logic-kernel schema
+jsonrtl schema
 ```

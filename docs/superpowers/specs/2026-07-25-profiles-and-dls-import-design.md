@@ -2,7 +2,7 @@
 
 Date: 2026-07-25
 Status: Approved (design) — pending written-spec review
-Owner: logic-kernel
+Owner: jsonrtl
 
 ## Goal
 
@@ -10,7 +10,7 @@ Let the kernel compile *other* digital-logic JSON formats to Verilog by first
 converting them to canonical circuit JSON v1.0, then reusing the existing
 compiler. Ship this as:
 
-1. A **profiles** subsystem — a `profiles/` folder plus a `logic-kernel-profiles`
+1. A **profiles** subsystem — a `profiles/` folder plus a `jsonrtl-profiles`
    crate — that converts a foreign project into canonical documents.
 2. A first profile for **Sebastian Lague's Digital-Logic-Sim (DLS)**.
 3. A CLI `import` command: *give it a project directory, get Verilog back*,
@@ -33,7 +33,7 @@ works), **H** hierarchical modules (schema v1.1), **S** sequential (schema v2).
 
 ## Background: the two models
 
-**Canonical kernel model** (`logic-kernel`) is flat: a `Circuit` has `ports`
+**Canonical kernel model** (`jsonrtl`) is flat: a `Circuit` has `ports`
 (module boundary), `components` (primitive gates: AND/OR/XOR/XNOR/NAND/NOR/NOT/
 BUFFER/CONST), and `nets`. NAND's logical ports are `A`,`B` (in) and `Y` (out),
 uniform width. Multi-bit (`width > 1`) already compiles end-to-end. There is no
@@ -69,11 +69,11 @@ module **output** pins and NAND **input** pins are sinks.
 
 ```
 crates/
-  logic-kernel/            (unchanged public API)
-  logic-kernel-cli/        (+ `import` subcommand)
-  logic-kernel-api/        (unchanged this phase)
-  logic-kernel-profiles/   NEW library: Profile trait + registry + dls module
-                           depends on logic-kernel (inward only)
+  jsonrtl/            (unchanged public API)
+  jsonrtl-cli/        (+ `import` subcommand)
+  jsonrtl-api/        (unchanged this phase)
+  jsonrtl-profiles/   NEW library: Profile trait + registry + dls module
+                           depends on jsonrtl (inward only)
 profiles/                  NEW folder
   dls/
     profile.toml           manifest: id, name, source-format, supported subset
@@ -81,7 +81,7 @@ profiles/                  NEW folder
     fixtures/              sample DLS project(s) + expected canonical/Verilog
 ```
 
-Dependency direction is preserved: `logic-kernel-profiles → logic-kernel`. The
+Dependency direction is preserved: `jsonrtl-profiles → jsonrtl`. The
 core library gains no dependency on profiles, transports, or the DLS format.
 
 ### `Profile` trait
@@ -144,7 +144,7 @@ diagnostic naming the chip and offending pin/subchip:
 ### CLI `import`
 
 ```
-logic-kernel import <project-dir>
+jsonrtl import <project-dir>
     [--profile <id>]         # default: auto-detect
     [--out <dir>]            # write one <ChipName>.v per emittable chip
     [--chip <name>]          # restrict to one chip

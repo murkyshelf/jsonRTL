@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, panic};
 
-use logic_kernel::{
+use jsonrtl::{
     CIRCUIT_V1_SCHEMA, COMPONENT_DEFINITIONS, CircuitDocument, ComponentType, KernelLimits,
     ParseError, PortDirection, component_definition,
 };
@@ -320,8 +320,8 @@ fn component_catalog_has_unique_ports_and_one_output() {
 #[test]
 fn crate_manifests_enforce_dependency_direction() {
     const CORE_MANIFEST: &str = include_str!("../Cargo.toml");
-    const CLI_MANIFEST: &str = include_str!("../../logic-kernel-cli/Cargo.toml");
-    const API_MANIFEST: &str = include_str!("../../logic-kernel-api/Cargo.toml");
+    const CLI_MANIFEST: &str = include_str!("../../jsonrtl-cli/Cargo.toml");
+    const API_MANIFEST: &str = include_str!("../../jsonrtl-api/Cargo.toml");
 
     for forbidden in ["axum", "tokio", "clap", "yosy", "librelane"] {
         assert!(
@@ -329,8 +329,8 @@ fn crate_manifests_enforce_dependency_direction() {
             "core manifest must not depend on {forbidden}"
         );
     }
-    assert!(CLI_MANIFEST.contains("logic-kernel = { path = \"../logic-kernel\" }"));
-    assert!(API_MANIFEST.contains("logic-kernel = { path = \"../logic-kernel\" }"));
+    assert!(CLI_MANIFEST.contains("jsonrtl = { path = \"../jsonrtl\" }"));
+    assert!(API_MANIFEST.contains("jsonrtl = { path = \"../jsonrtl\" }"));
 }
 
 fn assert_schema_error(input: &str, expected_code: &str, expected_path: &str) {

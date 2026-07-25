@@ -7,16 +7,16 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Format import profiles** (`logic-kernel-profiles` crate): a `Profile` trait,
+- **Format import profiles** (`jsonrtl-profiles` crate): a `Profile` trait,
   registry, and `ProfileError` taxonomy for converting third-party project
   formats into canonical circuit documents. Profiles depend only on the public
-  `logic-kernel` contract.
+  `jsonrtl` contract.
 - **DLS import profile** for Sebastian Lague's Digital-Logic-Sim: loads a project
   directory (`ProjectDescription.json` + `Chips/*.json`), flattens each
   hierarchical chip down to NAND primitives, and lowers it to canonical JSON.
   Supports the combinational, single-bit subset; multi-bit pins and every
   non-NAND built-in are rejected with a precise diagnostic.
-- **CLI `import` command**: `logic-kernel import <project-dir> [--profile ID]
+- **CLI `import` command**: `jsonrtl import <project-dir> [--profile ID]
   [--out DIR] [--chip NAME] [--stdout] [--emit-canonical DIR] [--force]`. Emits
   one `<ChipName>.v` per chip, mirroring the project layout; reuses the existing
   diagnostics, atomic writes, and exit codes.

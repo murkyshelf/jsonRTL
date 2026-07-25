@@ -49,7 +49,7 @@ impl crate::Profile for DlsProfile {
 mod tests {
     use super::*;
     use crate::Profile;
-    use logic_kernel::{CompileOptions, Kernel};
+    use jsonrtl::{CompileOptions, Kernel};
     use std::path::PathBuf;
 
     fn fixture(name: &str) -> PathBuf {

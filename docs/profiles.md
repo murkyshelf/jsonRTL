@@ -2,8 +2,8 @@
 
 Import profiles convert third-party digital-logic project formats into canonical
 circuit JSON v1.0 so the existing kernel can validate them and compile Verilog.
-They live in the `logic-kernel-profiles` crate and depend only on the public
-`logic-kernel` contract — the core library has no knowledge of any foreign
+They live in the `jsonrtl-profiles` crate and depend only on the public
+`jsonrtl` contract — the core library has no knowledge of any foreign
 format.
 
 Profiles are the server-side analogue of a UI adapter (see `ARCHITECTURE.md`):
@@ -118,7 +118,7 @@ silently skipped:
 
 ## Adding a profile
 
-1. Add a module under `crates/logic-kernel-profiles/src/` implementing `Profile`.
+1. Add a module under `crates/jsonrtl-profiles/src/` implementing `Profile`.
 2. Register it in `registry()`.
 3. Add `profiles/<id>/` with a `profile.toml` manifest, a `README.md` documenting
    the source format and supported subset, and test fixtures.

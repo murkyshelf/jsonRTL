@@ -3,7 +3,7 @@ use std::{
     panic,
 };
 
-use logic_kernel::{
+use jsonrtl::{
     Circuit, CircuitDocument, Component, ComponentType, DIAGNOSTIC_CODES, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, Kernel, KernelLimits, ModulePort, Net, Parameters,
     PortDirection, SchemaVersion, ValidationReport,

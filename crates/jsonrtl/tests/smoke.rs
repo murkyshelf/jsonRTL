@@ -1,4 +1,4 @@
-use logic_kernel::{CircuitDocument, CompileOptions, Kernel};
+use jsonrtl::{CircuitDocument, CompileOptions, Kernel};
 
 const MINIMAL_AND: &str = include_str!("../../../tests/fixtures/valid/minimal-and.json");
 const MINIMAL_AND_VERILOG: &str = include_str!("../../../tests/golden/minimal-and.v");

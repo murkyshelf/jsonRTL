@@ -1,6 +1,6 @@
 [package]
-name = "logic-kernel-cli"
-description = "Command-line boundary for logic-kernel"
+name = "jsonrtl-cli"
+description = "Command-line boundary for jsonrtl"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ publish.workspace = true
 
 [dependencies]
 clap.workspace = true
-logic-kernel = { path = "../logic-kernel" }
-logic-kernel-profiles = { path = "../logic-kernel-profiles" }
+jsonrtl = { path = "../jsonrtl" }
+jsonrtl-profiles = { path = "../jsonrtl-profiles" }
 serde.workspace = true
 serde_json.workspace = true
 
 [[bin]]
-name = "logic-kernel"
+name = "jsonrtl"
 path = "src/main.rs"

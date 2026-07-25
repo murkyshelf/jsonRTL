@@ -1,7 +1,7 @@
 # Import profile manifest — Sebastian Lague's Digital-Logic-Sim (DLS).
 #
 # This manifest is metadata and documentation. The authoritative converter is
-# the Rust `dls` module in the `logic-kernel-profiles` crate; see
+# the Rust `dls` module in the `jsonrtl-profiles` crate; see
 # `../../docs/profiles.md`.
 
 [profile]

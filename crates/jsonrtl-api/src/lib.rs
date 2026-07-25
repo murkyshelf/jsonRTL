@@ -8,7 +8,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
-use logic_kernel::{
+use jsonrtl::{
     CircuitDocument, CompileOptions, Diagnostic, KERNEL_VERSION, Kernel, KernelLimits,
     LimitDiagnostic, ParseError, SUPPORTED_SCHEMA_VERSION, SchemaDiagnostic, SourceMap,
     VerilogIdentifier,

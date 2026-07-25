@@ -10,8 +10,8 @@ manifest and a runnable example.
 
 ```sh
 # Build the CLI, then import the bundled example project.
-cargo build -p logic-kernel-cli
-./target/debug/logic-kernel import profiles/dls/example --out /tmp/dls-verilog
+cargo build -p jsonrtl-cli
+./target/debug/jsonrtl import profiles/dls/example --out /tmp/dls-verilog
 
 # One <ChipName>.v is written per chip:
 #   AND.v  OR.v  NOT.v  XOR.v  "1-bit adder.v"
@@ -21,10 +21,10 @@ Other modes:
 
 ```sh
 # Print a single chip's Verilog:
-logic-kernel import profiles/dls/example --chip AND --stdout
+jsonrtl import profiles/dls/example --chip AND --stdout
 
 # Also emit the intermediate canonical JSON (the kernel contract):
-logic-kernel import profiles/dls/example --out out --emit-canonical canon
+jsonrtl import profiles/dls/example --out out --emit-canonical canon
 ```
 
 The profile is auto-detected from the directory layout; pass `--profile dls` to

@@ -116,7 +116,7 @@ fn import_json_diagnostics_list_units() {
 }
 
 fn binary() -> &'static str {
-    env!("CARGO_BIN_EXE_logic-kernel")
+    env!("CARGO_BIN_EXE_jsonrtl")
 }
 
 fn run<const N: usize>(arguments: [&str; N]) -> Output {
@@ -125,13 +125,13 @@ fn run<const N: usize>(arguments: [&str; N]) -> Output {
 
 fn dls_project(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../logic-kernel-profiles/tests/fixtures/dls")
+        .join("../jsonrtl-profiles/tests/fixtures/dls")
         .join(name)
 }
 
 fn dls_golden(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../logic-kernel-profiles/tests/golden")
+        .join("../jsonrtl-profiles/tests/golden")
         .join(name)
 }
 
@@ -145,7 +145,7 @@ impl TempDirectory {
     fn new() -> Self {
         let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "logic-kernel-import-cli-{}-{counter}",
+            "jsonrtl-import-cli-{}-{counter}",
             std::process::id()
         ));
         fs::create_dir(&path).unwrap();

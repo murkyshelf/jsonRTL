@@ -1,14 +1,13 @@
 [package]
-name = "logic-kernel"
-description = "UI-independent digital-logic document parser and compiler kernel"
+name = "jsonrtl-profiles"
+description = "Foreign-format import profiles that convert third-party projects into canonical circuit documents for jsonrtl"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-jsonschema.workspace = true
+jsonrtl = { path = "../jsonrtl" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-

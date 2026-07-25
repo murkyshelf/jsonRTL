@@ -13,7 +13,7 @@ Browser UI -----\
 Desktop UI ------> client-owned adapter --> canonical JSON
 Third-party tool /                              |
                                                 v
-                                    reusable logic-kernel library
+                                    reusable jsonrtl library
                                       ^                    ^
                                       |                    |
                                      CLI               REST API
@@ -26,12 +26,12 @@ validation, normalized IR, generation, or simulation semantics.
 ## Planned repository boundaries
 
 ```text
-logic-kernel/
+jsonrtl/
 ├── crates/
-│   ├── logic-kernel/          public model, validation, IR, compiler; reusable library
-│   ├── logic-kernel-cli/      local process boundary; depends on logic-kernel
-│   ├── logic-kernel-api/      Axum transport boundary; depends on logic-kernel
-│   └── logic-kernel-profiles/ foreign-format import profiles; depends on logic-kernel
+│   ├── jsonrtl/          public model, validation, IR, compiler; reusable library
+│   ├── jsonrtl-cli/      local process boundary; depends on jsonrtl
+│   ├── jsonrtl-api/      Axum transport boundary; depends on jsonrtl
+│   └── jsonrtl-profiles/ foreign-format import profiles; depends on jsonrtl
 ├── profiles/
 │   └── dls/                   per-profile manifest, docs, and fixtures
 ├── schemas/
@@ -56,14 +56,14 @@ the library.
 
 ```text
 UI application --> UI adapter --> canonical JSON schema/model
-CLI ---------------------------------------> logic-kernel
-REST API ----------------------------------> logic-kernel
-import profiles ---------------------------> logic-kernel
-future WASM wrapper -----------------------> logic-kernel
+CLI ---------------------------------------> jsonrtl
+REST API ----------------------------------> jsonrtl
+import profiles ---------------------------> jsonrtl
+future WASM wrapper -----------------------> jsonrtl
 future simulator extension ---------------> normalized kernel contracts
 future physical-design orchestrator ------> compiler artifacts
 
-logic-kernel -X-> CLI / REST / profiles / UI / Axum / Tokio / Clap / Yosys / LibreLane
+jsonrtl -X-> CLI / REST / profiles / UI / Axum / Tokio / Clap / Yosys / LibreLane
 ```
 
 Import profiles are the server-side analogue of a UI adapter: they map a foreign
@@ -219,7 +219,7 @@ access, process execution, template evaluation, or arbitrary code execution.
 ## Architecture conformance gate
 
 - The canonical document is understandable without a UI model.
-- Application crates depend on `logic-kernel`; the reverse dependency is forbidden.
+- Application crates depend on `jsonrtl`; the reverse dependency is forbidden.
 - Raw JSON cannot reach the generator without all validation and normalization stages.
 - The normalized IR is private and contains no UI metadata.
 - Simulation and physical design are future consumers/layers, not V1 dependencies.

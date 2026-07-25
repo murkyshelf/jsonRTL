@@ -7,11 +7,11 @@ use std::{
 };
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use logic_kernel::{
+use jsonrtl::{
     CIRCUIT_V1_SCHEMA, CircuitDocument, CompileOptions, Diagnostic, DiagnosticCode, Kernel,
     ParseError, SUPPORTED_SCHEMA_VERSION, ValidationReport,
 };
-use logic_kernel_profiles::{NamedCircuit, Profile, ProfileError, detect_profile, profile_by_id};
+use jsonrtl_profiles::{NamedCircuit, Profile, ProfileError, detect_profile, profile_by_id};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -23,7 +23,7 @@ static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "logic-kernel",
+    name = "jsonrtl",
     version,
     about = "Validate canonical digital circuits and compile deterministic Verilog-2001"
 )]

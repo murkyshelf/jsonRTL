@@ -1,13 +1,13 @@
-//! Foreign-format import profiles for `logic-kernel`.
+//! Foreign-format import profiles for `jsonrtl`.
 //!
 //! A [`Profile`] converts a third-party digital-logic project (a directory on
 //! disk) into one or more canonical [`CircuitDocument`]s that the kernel can
 //! validate and compile to Verilog. Profiles depend only on the public
-//! `logic-kernel` contract; the core library has no knowledge of them.
+//! `jsonrtl` contract; the core library has no knowledge of them.
 
 use std::path::Path;
 
-use logic_kernel::CircuitDocument;
+use jsonrtl::CircuitDocument;
 
 pub mod dls;
 

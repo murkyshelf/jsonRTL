@@ -35,7 +35,7 @@ pub use validation::Kernel;
 /// The only canonical document version implemented by this release.
 pub const SUPPORTED_SCHEMA_VERSION: &str = "1.0";
 
-/// Semantic version of the logic-kernel library.
+/// Semantic version of the jsonrtl library.
 pub const KERNEL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The embedded canonical JSON Schema for [`SUPPORTED_SCHEMA_VERSION`].

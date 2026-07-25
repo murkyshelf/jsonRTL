@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://digital-logic-kernel.local/schemas/circuit-v1.schema.json",
+  "$id": "https://jsonrtl.local/schemas/circuit-v1.schema.json",
   "title": "Digital Logic Kernel canonical circuit document v1.0",
   "description": "UI-independent, versioned public document for combinational digital logic. UI data is permitted only in editorMetadata and has no logical meaning.",
   "type": "object",

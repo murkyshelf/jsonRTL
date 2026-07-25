@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use logic_kernel::{
+use jsonrtl::{
     Circuit, CircuitDocument, Component, ComponentType, ModulePort, Net, PortDirection,
     SchemaVersion,
 };
@@ -138,14 +138,14 @@ mod tests {
     use super::*;
     use crate::dls::elaborate::{BoundaryPin, NandInst, elaborate};
     use crate::dls::model::load_project;
-    use logic_kernel::{CompileOptions, Kernel};
+    use jsonrtl::{CompileOptions, Kernel};
     use std::path::PathBuf;
 
     fn project_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/dls/test")
     }
 
-    fn compile(document: &CircuitDocument) -> logic_kernel::CompileResult {
+    fn compile(document: &CircuitDocument) -> jsonrtl::CompileResult {
         Kernel::default().compile_verilog(document, &CompileOptions::default())
     }
 

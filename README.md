@@ -21,7 +21,7 @@ Phases 1 through 3 are implemented:
 - Byte-exact golden coverage for gates, adders, vectors, constants, and sanitization
 - CLI and Axum service shells over the reusable core crate
 
-The **format-import profiles** subsystem (`logic-kernel-profiles` crate)
+The **format-import profiles** subsystem (`jsonrtl-profiles` crate)
 converts third-party project formats into canonical documents. The first profile
 imports Sebastian Lague's Digital-Logic-Sim (DLS): the CLI `import` command reads
 a project directory, flattens each hierarchical chip to NAND primitives, and
@@ -31,11 +31,11 @@ Simulation and physical-design execution are intentionally not implemented yet.
 
 ## Workspace
 
-- `crates/logic-kernel`: transport-free model, parser, validator, IR, and compiler
-- `crates/logic-kernel-cli`: command-line shell depending on `logic-kernel`
-- `crates/logic-kernel-api`: Axum service shell depending on `logic-kernel`
-- `crates/logic-kernel-profiles`: foreign-format import profiles (e.g. DLS)
-  depending on `logic-kernel`
+- `crates/jsonrtl`: transport-free model, parser, validator, IR, and compiler
+- `crates/jsonrtl-cli`: command-line shell depending on `jsonrtl`
+- `crates/jsonrtl-api`: Axum service shell depending on `jsonrtl`
+- `crates/jsonrtl-profiles`: foreign-format import profiles (e.g. DLS)
+  depending on `jsonrtl`
 - `schemas`: canonical schema and illustrative contract examples
 - `tests/fixtures`: parser, semantic-validation, and compiler fixtures
 - `tests/golden`: byte-exact Verilog-2001 compiler expectations
@@ -43,20 +43,20 @@ Simulation and physical-design execution are intentionally not implemented yet.
 ## Library example
 
 ```rust
-use logic_kernel::CircuitDocument;
+use jsonrtl::CircuitDocument;
 
 let input = include_str!("schemas/examples/minimal-and.json");
 let document = CircuitDocument::from_json(input)?;
 assert_eq!(document.schema_version.as_str(), "1.0");
-let report = logic_kernel::Kernel::default().validate(&document);
+let report = jsonrtl::Kernel::default().validate(&document);
 assert!(!report.has_errors());
 
-let result = logic_kernel::Kernel::default().compile_verilog(
+let result = jsonrtl::Kernel::default().compile_verilog(
     &document,
-    &logic_kernel::CompileOptions::default(),
+    &jsonrtl::CompileOptions::default(),
 );
 assert!(result.has_output());
-# Ok::<(), logic_kernel::ParseError>(())
+# Ok::<(), jsonrtl::ParseError>(())
 ```
 
 ## Checks

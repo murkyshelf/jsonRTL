@@ -353,7 +353,7 @@ fn json_diagnostics_for_compile_stdout() {
 }
 
 fn binary() -> &'static str {
-    env!("CARGO_BIN_EXE_logic-kernel")
+    env!("CARGO_BIN_EXE_jsonrtl")
 }
 
 fn run<const N: usize>(arguments: [&str; N]) -> Output {
@@ -382,7 +382,7 @@ impl TempDirectory {
     fn new() -> Self {
         let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "logic-kernel-phase4-cli-{}-{counter}",
+            "jsonrtl-phase4-cli-{}-{counter}",
             std::process::id()
         ));
         fs::create_dir(&path).unwrap();

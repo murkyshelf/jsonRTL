@@ -2,14 +2,14 @@
 //! to the committed Verilog. Regenerate goldens with:
 //!
 //! ```sh
-//! logic-kernel import crates/logic-kernel-profiles/tests/fixtures/dls/test \
-//!     --out crates/logic-kernel-profiles/tests/golden --force
+//! jsonrtl import crates/jsonrtl-profiles/tests/fixtures/dls/test \
+//!     --out crates/jsonrtl-profiles/tests/golden --force
 //! ```
 
 use std::path::PathBuf;
 
-use logic_kernel::{CompileOptions, Kernel};
-use logic_kernel_profiles::{Profile, dls::DlsProfile};
+use jsonrtl::{CompileOptions, Kernel};
+use jsonrtl_profiles::{Profile, dls::DlsProfile};
 
 fn crate_path(sub: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(sub)

@@ -4,14 +4,14 @@
 
 **Goal:** Compile foreign digital-logic project formats to Verilog by converting them to canonical circuit JSON v1.0 and reusing the existing kernel compiler; first profile = Sebastian Lague Digital-Logic-Sim (DLS).
 
-**Architecture:** New `logic-kernel-profiles` library (a `Profile` trait + registry + a `dls` module) that flattens a hierarchical DLS project down to NAND primitives, lowers to canonical `CircuitDocument`s, and hands them to `Kernel::compile_verilog`. A new CLI `import` subcommand drives it, emitting one `.v` per chip. Dependency direction is inward: `profiles → logic-kernel`.
+**Architecture:** New `jsonrtl-profiles` library (a `Profile` trait + registry + a `dls` module) that flattens a hierarchical DLS project down to NAND primitives, lowers to canonical `CircuitDocument`s, and hands them to `Kernel::compile_verilog`. A new CLI `import` subcommand drives it, emitting one `.v` per chip. Dependency direction is inward: `profiles → jsonrtl`.
 
-**Tech Stack:** Rust (workspace), serde/serde_json, clap (CLI), existing `logic-kernel`.
+**Tech Stack:** Rust (workspace), serde/serde_json, clap (CLI), existing `jsonrtl`.
 
 ## Global Constraints
 
 - Canonical schema version: `1.0`. Component types: AND/OR/XOR/XNOR/NAND/NOR/NOT/BUFFER/CONST. NAND ports: `A`,`B` in, `Y` out; uniform width.
-- The core `logic-kernel` crate gains **no** dependency on profiles/DLS.
+- The core `jsonrtl` crate gains **no** dependency on profiles/DLS.
 - DLS subset this phase: **combinational, single-bit, primitive = NAND only.** Anything else (BitCount≠1, CLOCK/PULSE/KEY/3-STATE/BUS/merge-split/display/ROM) → precise diagnostic + stop. No silent skipping.
 - No panics on untrusted input: profile + CLI return errors/diagnostics.
 - Determinism: derive stable canonical IDs from DLS integer IDs; sort before emit.
@@ -19,11 +19,11 @@
 
 ---
 
-### Task 1: Scaffold `logic-kernel-profiles` crate + `Profile` trait
+### Task 1: Scaffold `jsonrtl-profiles` crate + `Profile` trait
 
 **Files:**
-- Create: `crates/logic-kernel-profiles/Cargo.toml`
-- Create: `crates/logic-kernel-profiles/src/lib.rs` (Profile trait, registry, ProfileError, ProjectConversion, NamedCircuit)
+- Create: `crates/jsonrtl-profiles/Cargo.toml`
+- Create: `crates/jsonrtl-profiles/src/lib.rs` (Profile trait, registry, ProfileError, ProjectConversion, NamedCircuit)
 - Modify: `Cargo.toml` (workspace members)
 - Test: inline `#[cfg(test)]` in lib.rs
 
@@ -49,9 +49,9 @@ pub fn detect_profile(path: &std::path::Path) -> Option<Box<dyn Profile>>;
 ### Task 2: DLS serde model + project loader
 
 **Files:**
-- Create: `crates/logic-kernel-profiles/src/dls/model.rs` (serde structs)
-- Create: `crates/logic-kernel-profiles/src/dls/mod.rs`
-- Test: fixtures under `crates/logic-kernel-profiles/tests/fixtures/dls/test/` (copied from the real bundled project)
+- Create: `crates/jsonrtl-profiles/src/dls/model.rs` (serde structs)
+- Create: `crates/jsonrtl-profiles/src/dls/mod.rs`
+- Test: fixtures under `crates/jsonrtl-profiles/tests/fixtures/dls/test/` (copied from the real bundled project)
 
 **Interfaces produced:**
 ```rust
@@ -74,7 +74,7 @@ pub fn load_project(dir: &Path) -> Result<DlsProject, ProfileError>;
 ### Task 3: Elaboration engine — flatten hierarchy to NAND netlist
 
 **Files:**
-- Create: `crates/logic-kernel-profiles/src/dls/elaborate.rs`
+- Create: `crates/jsonrtl-profiles/src/dls/elaborate.rs`
 - Test: inline tests + uses fixtures.
 
 **Interfaces produced:**
@@ -99,7 +99,7 @@ Algorithm: union-find over endpoint keys. Endpoint key = `(instance_path, pin_id
 ### Task 4: Lower flat netlist → canonical `CircuitDocument`
 
 **Files:**
-- Create: `crates/logic-kernel-profiles/src/dls/lower.rs`
+- Create: `crates/jsonrtl-profiles/src/dls/lower.rs`
 - Test: integration test that also compiles via the kernel.
 
 **Interfaces produced:**
@@ -116,7 +116,7 @@ Each net index → a canonical `Net` (`n{idx}`, width 1). Each NAND → `Compone
 ### Task 5: Wire `DlsProfile::convert` + rejection diagnostics
 
 **Files:**
-- Modify: `crates/logic-kernel-profiles/src/dls/mod.rs`
+- Modify: `crates/jsonrtl-profiles/src/dls/mod.rs`
 - Test: inline + an unsupported fixture (a hand-made chip with a CLOCK subchip and a multi-bit pin).
 
 **Interfaces:** consumes `load_project`, `elaborate`, `lower`. `DlsProfile::convert` = load → for each chip name: elaborate+lower → collect `NamedCircuit`; `detect` = dir has `ProjectDescription.json` + `Chips/`.
@@ -129,8 +129,8 @@ Each net index → a canonical `Net` (`n{idx}`, width 1). Each NAND → `Compone
 ### Task 6: Golden — canonical JSON + Verilog for the whole project
 
 **Files:**
-- Create: `crates/logic-kernel-profiles/tests/golden.rs`
-- Create golden outputs under `crates/logic-kernel-profiles/tests/golden/` (`AND.v`, `OR.v`, `XOR.v`, `NOT.v`, `1-bit-adder.v`).
+- Create: `crates/jsonrtl-profiles/tests/golden.rs`
+- Create golden outputs under `crates/jsonrtl-profiles/tests/golden/` (`AND.v`, `OR.v`, `XOR.v`, `NOT.v`, `1-bit-adder.v`).
 
 - [ ] Write test that converts the fixture project, compiles each chip, and asserts byte-equality against committed golden `.v` (regenerate-on-first-run guard documented).
 - [ ] Run → generate + eyeball each `.v` for correctness (AND = 2 NAND; adder sum/carry structure). Commit golden + test.
@@ -138,9 +138,9 @@ Each net index → a canonical `Net` (`n{idx}`, width 1). Each NAND → `Compone
 ### Task 7: CLI `import` subcommand
 
 **Files:**
-- Modify: `crates/logic-kernel-cli/Cargo.toml` (dep on `logic-kernel-profiles`)
-- Modify: `crates/logic-kernel-cli/src/main.rs` (add `Import` command + handler)
-- Test: `crates/logic-kernel-cli/tests/import.rs`
+- Modify: `crates/jsonrtl-cli/Cargo.toml` (dep on `jsonrtl-profiles`)
+- Modify: `crates/jsonrtl-cli/src/main.rs` (add `Import` command + handler)
+- Test: `crates/jsonrtl-cli/tests/import.rs`
 
 CLI: `import <dir> [--profile id] [--out DIR] [--chip NAME] [--stdout] [--emit-canonical DIR] [--force]`. Default → all chips to `<out>/<ChipName>.v` via existing atomic write; `--chip X --stdout` prints one module; `--emit-canonical` writes canonical JSON per chip; auto-detect profile when omitted; reuse `--diagnostics human|json` + exit codes (2 invalid, 3 io, 4 internal).
 

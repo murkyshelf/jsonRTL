@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "crates/logic-kernel",
-    "crates/logic-kernel-api",
-    "crates/logic-kernel-cli",
-    "crates/logic-kernel-profiles",
+    "crates/jsonrtl",
+    "crates/jsonrtl-api",
+    "crates/jsonrtl-cli",
+    "crates/jsonrtl-profiles",
 ]
 resolver = "2"
 

@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, panic};
 
-use logic_kernel::{
+use jsonrtl::{
     CircuitDocument, CompileOptions, DiagnosticCode, Kernel, SourceMapKind, VerilogIdentifier,
 };
 
@@ -119,7 +119,7 @@ fn array_reordering_and_editor_metadata_do_not_change_generated_bytes() {
     document.circuit.ports.reverse();
     document.circuit.components.reverse();
     document.circuit.nets.reverse();
-    document.editor_metadata = Some(logic_kernel::EditorMetadata(serde_json::json!({
+    document.editor_metadata = Some(jsonrtl::EditorMetadata(serde_json::json!({
         "positions": [8, 5, 3],
         "note": "must never reach normalized IR"
     })));
@@ -307,7 +307,7 @@ fn compile_result_is_repeatable_and_stably_serializable() {
     let second = compile(FULL_ADDER, CompileOptions::default());
     assert_eq!(first, second);
     let encoded = serde_json::to_string(&first).expect("compile result serializes");
-    let decoded: logic_kernel::CompileResult =
+    let decoded: jsonrtl::CompileResult =
         serde_json::from_str(&encoded).expect("compile result deserializes");
     assert_eq!(decoded, first);
 
@@ -335,7 +335,7 @@ fn hostile_typed_documents_do_not_panic_or_emit_output() {
     assert!(result.source_map.is_none());
 }
 
-fn compile(input: &str, options: CompileOptions) -> logic_kernel::CompileResult {
+fn compile(input: &str, options: CompileOptions) -> jsonrtl::CompileResult {
     let document = CircuitDocument::from_json(input).expect("fixture parses");
     Kernel::default().compile_verilog(&document, &options)
 }
