@@ -689,8 +689,19 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "logic-kernel",
+ "logic-kernel-profiles",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "logic-kernel-profiles"
+version = "0.1.0"
+dependencies = [
+ "logic-kernel",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

@@ -1,0 +1,12 @@
+{
+  "Name": "clocky",
+  "InputPins": [],
+  "OutputPins": [{ "Name": "q", "ID": 1, "BitCount": 1 }],
+  "SubChips": [{ "Name": "CLOCK", "ID": 2 }],
+  "Wires": [
+    {
+      "SourcePinAddress": { "PinID": 0, "PinOwnerID": 2 },
+      "TargetPinAddress": { "PinID": 0, "PinOwnerID": 1 }
+    }
+  ]
+}

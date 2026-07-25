@@ -1,0 +1,12 @@
+{
+  "Name": "wide",
+  "InputPins": [{ "Name": "in", "ID": 10, "BitCount": 4 }],
+  "OutputPins": [{ "Name": "out", "ID": 11, "BitCount": 4 }],
+  "SubChips": [],
+  "Wires": [
+    {
+      "SourcePinAddress": { "PinID": 0, "PinOwnerID": 10 },
+      "TargetPinAddress": { "PinID": 0, "PinOwnerID": 11 }
+    }
+  ]
+}

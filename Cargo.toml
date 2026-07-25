@@ -3,6 +3,7 @@ members = [
     "crates/logic-kernel",
     "crates/logic-kernel-api",
     "crates/logic-kernel-cli",
+    "crates/logic-kernel-profiles",
 ]
 resolver = "2"
 

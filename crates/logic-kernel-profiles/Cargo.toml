@@ -1,0 +1,13 @@
+[package]
+name = "logic-kernel-profiles"
+description = "Foreign-format import profiles that convert third-party projects into canonical circuit documents for logic-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+logic-kernel = { path = "../logic-kernel" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
