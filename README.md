@@ -23,9 +23,9 @@ Phases 1 through 3 are implemented:
 
 The **format-import profiles** subsystem (`jsonrtl-profiles` crate)
 converts third-party project formats into canonical documents. The first profile
-imports Sebastian Lague's Digital-Logic-Sim (DLS): the CLI `import` command reads
-a project directory, flattens each hierarchical chip to NAND primitives, and
-compiles one `.v` per chip. See `docs/profiles.md`.
+imports Sebastian Lague's Digital-Logic-Sim (DLS) and Logisim / Logisim Evolution
+(`.circ`): the CLI `import` command reads a project, flattens it to primitive
+gates, and compiles one `.v` per chip or circuit. See `docs/profiles.md`.
 
 Simulation and physical-design execution are intentionally not implemented yet.
 

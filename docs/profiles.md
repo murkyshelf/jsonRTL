@@ -49,6 +49,8 @@ diagnostics), always naming the offending source unit:
 | DLS flatten-to-NAND elaboration + lowering | landed |
 | CLI `import` command | landed |
 | `profiles/dls/` manifest, docs, example | landed |
+| Logisim/Evolution profile (`.circ`, gates + pins) | landed, experimental |
+| Logisim subcircuit instances | blocked on port-geometry calibration |
 | Multi-bit buses (Phase M) | kernel supports width>1; DLS profile rejects (staged) |
 | Hierarchical Verilog emission (Phase H) | staged |
 | Sequential / clock (Phase S) | staged |
@@ -130,6 +132,45 @@ Project files are untrusted. The profile enforces these before doing any work:
 The CLI independently re-checks unit names before writing and refuses the whole
 run if any destination exists without `--force`, so a failed import never leaves
 a partial set of files behind.
+
+## The Logisim profile (Logisim and Logisim Evolution)
+
+Both tools share the `.circ` XML format, so one profile with id `logisim`
+handles them; the variant is reported from the file's `source` attribute. A
+project is a single `.circ` file, and every `<circuit>` in it becomes one
+canonical document.
+
+**Status: experimental.** Port geometry has not been calibrated against real
+exports — see `profiles/logisim/samples/README.md`.
+
+### Geometric connectivity
+
+This is the structural difference from DLS. DLS wires name the pin ids they
+join; a Logisim wire is only a pair of coordinates and connects to whatever port
+shares that point. Conversion therefore:
+
+1. recomputes each component's port positions from its `loc`, `facing`, `size`,
+   and input count (`logisim/geometry.rs`);
+2. merges every point that touches, including a wire ending part-way along
+   another wire, which Logisim treats as a junction;
+3. reads module ports off `Pin` components — a pin that drives the sheet is a
+   module input, one that reads it is a module output.
+
+Because the geometry rules are assumptions until real files confirm them, they
+live in one small module, each is pinned by a test, and a mis-resolved wire
+shows up as an undriven-net error from the kernel rather than as wrong Verilog.
+
+### Supported subset
+
+Single-bit combinational logic: `Pin` and the basic gates (`AND`, `OR`, `XOR`,
+`NAND`, `NOR`, `XNOR`, `NOT`, `Buffer`). Logisim gates accept more than two
+inputs; those fold into the kernel's 2-input catalog gates, with inverting forms
+folded on their non-inverting base and inverted once at the end.
+
+Rejected with a diagnostic naming the component and its coordinate: every other
+library (plexers, arithmetic, memory, splitters, tunnels, clocks), multi-bit
+signals, and — for now — subcircuit instances, whose port layout depends on the
+instance appearance and cannot be reconstructed safely without a reference file.
 
 ## Adding a profile
 

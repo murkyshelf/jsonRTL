@@ -1,0 +1,36 @@
+# Import profile manifest — Logisim and Logisim Evolution.
+#
+# This manifest is metadata and documentation. The authoritative converter is
+# the Rust `logisim` module in the `jsonrtl-profiles` crate; see
+# `../../docs/profiles.md`.
+
+[profile]
+id = "logisim"
+name = "Logisim / Logisim Evolution"
+version = "0.1.0"
+source_format = "A single .circ XML file containing one or more <circuit> elements"
+status = "experimental — port geometry is not yet calibrated against real exports"
+
+[detection]
+# A path is treated as a Logisim project when it is a file with this extension.
+file_extensions = ["circ"]
+
+[support]
+# Connectivity is geometric: wires attach to whatever port shares their point.
+connectivity = "coordinate"
+components = [
+    "Pin", "AND Gate", "OR Gate", "XOR Gate",
+    "NAND Gate", "NOR Gate", "XNOR Gate", "NOT Gate", "Buffer",
+]
+bit_width = 1
+combinational_only = true
+# Logisim gates accept many inputs; wider gates fold into 2-input catalog gates.
+max_gate_inputs = "folded"
+
+[support.rejected]
+multi_bit = true
+subcircuits = true   # blocked on instance port geometry; needs a reference file
+other_libraries = [
+    "Plexers", "Arithmetic", "Memory", "Input/Output",
+    "Splitter", "Tunnel", "Clock", "Constant",
+]

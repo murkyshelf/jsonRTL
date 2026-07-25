@@ -26,6 +26,15 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   example project.
 - CI workflow (`fmt --check`, `clippy -D warnings`, `test`, doc tests, release
   build).
+- **Logisim / Logisim Evolution import profile** (`logisim`). Parses `.circ`
+  XML and rebuilds connectivity geometrically: port positions are recomputed
+  from each component's anchor, facing, size, and input count, and points that
+  touch — including a wire ending part-way along another — merge into one net.
+  Supports `Pin` and the basic gates, folding gates wider than two inputs into
+  the 2-input catalog. Multi-bit signals, other libraries, and subcircuit
+  instances are rejected with a diagnostic naming the component and coordinate.
+  Marked experimental until the geometry is calibrated against real exports.
+- `roxmltree` dependency for reading `.circ` XML.
 
 ### Fixed
 

@@ -10,6 +10,7 @@ use std::path::Path;
 use jsonrtl::CircuitDocument;
 
 pub mod dls;
+pub mod logisim;
 
 /// One canonical circuit produced from a foreign project, named after its
 /// source unit (for DLS, the chip name).
@@ -98,7 +99,7 @@ pub trait Profile {
 /// Every profile known to this build, in stable order.
 #[must_use]
 pub fn registry() -> Vec<Box<dyn Profile>> {
-    vec![Box::new(dls::DlsProfile)]
+    vec![Box::new(dls::DlsProfile), Box::new(logisim::LogisimProfile)]
 }
 
 /// Returns the registered profile with the given id, if any.
