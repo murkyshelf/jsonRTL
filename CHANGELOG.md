@@ -55,6 +55,12 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   failing on the first that does not. Each skipped unit is reported with its
   reason and the run still exits `2`, so a partial import is never mistaken for
   a complete one.
+- `schemas/examples/sliced-bus.json` and byte-exact golden
+  `tests/golden/sliced-bus.v` demonstrating part-select on both sides of an
+  assignment.
+- Installation instructions in `README.md` and `docs/cli.md`, plus a
+  "which command do I want?" table covering `import` versus
+  `validate`/`compile`.
 - **Profile discovery**: `jsonrtl profiles`, the global `--list-profiles` flag,
   and `jsonrtl import --list-profiles` all print the import profiles in the
   build with their source tool, expected input layout, supported subset, and

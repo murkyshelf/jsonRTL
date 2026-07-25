@@ -62,6 +62,21 @@ endmodule
 
 ## Supported subset
 
-Combinational, single-bit logic with **NAND** as the only primitive. Multi-bit
-pins and every non-NAND built-in (`CLOCK`, `3-STATE BUFFER`, buses, displays,
-memory, …) are rejected with a precise diagnostic. See `profile.toml`.
+Combinational logic of any width, with **NAND** as the only gate primitive.
+
+Pins wider than one bit keep their width to the module boundary, so a 16-bit
+adder compiles to `input wire [7:0] A0;` rather than eight scalar ports. DLS
+splits and merges buses with built-in `X-YBIT` chips ("convert X-bit to Y-bit",
+splitting when X > Y), ordered most significant first; `BUS-N` is a fan-out
+alias and `BUS-TERMINUS-N` a dropped sink. None of these emit logic — under a
+bit-level union-find a narrow pin simply *is* a bit of the wide one.
+
+Rejected with a precise diagnostic, never silently skipped:
+
+- built-ins outside that set: `CLOCK`, `PULSE`, `KEY`, `3-STATE BUFFER`,
+  `7-SEGMENT` and other displays, `ROM` and other memory;
+- a wire joining pins of different widths.
+
+Latch structures built from NAND feedback — DLS registers and RAM — are genuine
+combinational cycles for this kernel and are reported as such. See
+`profile.toml` and `../../docs/profiles.md`.

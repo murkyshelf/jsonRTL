@@ -63,7 +63,7 @@ enum Command {
     Import(ImportArgs),
     /// List the import profiles available in this build.
     Profiles,
-    /// Print the canonical circuit JSON Schema v1.0.
+    /// Print the canonical circuit JSON Schema.
     Schema,
 }
 

@@ -60,7 +60,8 @@ diagnostics), always naming the offending source unit:
 | `profiles/dls/` manifest, docs, example | landed |
 | Logisim/Evolution profile (`.circ`, gates + pins) | landed, experimental |
 | Logisim subcircuit instances | blocked on port-geometry calibration |
-| Multi-bit buses (Phase M) | landed for DLS (schema v1.1 slices); Logisim rejects |
+| Multi-bit buses (Phase M) | landed for DLS (schema v1.1 slices); Logisim still single-bit |
+| CLI `--skip-unsupported`, `profiles` / `--list-profiles` | landed |
 | Hierarchical Verilog emission (Phase H) | staged |
 | Sequential / clock (Phase S) | staged |
 
@@ -107,14 +108,20 @@ and NAND **inputs** are sinks.
 ### Conversion (flatten to NAND)
 
 1. Load the project into a `name -> ChipDef` map.
-2. For each chip, elaborate a flat NAND netlist: union-find over wire endpoints
-   builds nets, and custom subchips are recursively inlined with fresh instance
-   namespacing.
-3. Lower to canonical: each NAND instance becomes a `NAND` component (`A`,`B`→`Y`);
-   each boundary pin becomes an input/output `ModulePort`; pass-throughs insert a
-   `BUFFER`. Stable canonical IDs derive from DLS integer IDs.
-4. Hand each document to `Kernel::compile_verilog`, which enforces single-driver,
-   no-cycle, and width agreement.
+2. For each chip, elaborate a flat NAND netlist. Union-find runs over **single
+   bits** rather than whole pins: a pin of width *W* contributes *W* nodes, and
+   a wire unions its endpoints bit by bit. Custom subchips are recursively
+   inlined with fresh instance namespacing.
+3. Group the resulting union-find roots into canonical nets. Each boundary pin
+   becomes one net of its own width, so the module keeps a bus interface; every
+   other root becomes a one-bit internal net.
+4. Lower to canonical: each NAND instance becomes a one-bit `NAND` component
+   (`A`,`B`→`Y`) addressing bits through v1.1 slices, and each boundary pin
+   becomes an input/output `ModulePort`. An output-pin bit already driven under
+   another name gets a `BUFFER`. Stable canonical IDs derive from DLS integer
+   IDs.
+5. Hand each document to `Kernel::compile_verilog`, which enforces per-bit
+   single-driver, no-cycle, and width agreement.
 
 ### Supported subset and rejections
 

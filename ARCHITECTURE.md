@@ -33,7 +33,8 @@ jsonrtl/
 │   ├── jsonrtl-api/      Axum transport boundary; depends on jsonrtl
 │   └── jsonrtl-profiles/ foreign-format import profiles; depends on jsonrtl
 ├── profiles/
-│   └── dls/                   per-profile manifest, docs, and fixtures
+│   ├── dls/                   per-profile manifest, docs, and fixtures
+│   └── logisim/               ditto, for Logisim / Logisim Evolution
 ├── schemas/
 │   ├── circuit-v1.schema.json
 │   └── examples/

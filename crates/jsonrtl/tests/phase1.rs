@@ -51,6 +51,7 @@ fn phase_zero_examples_parse_under_the_implemented_schema() {
         include_str!("../../../schemas/examples/minimal-and.json"),
         include_str!("../../../schemas/examples/half-adder.json"),
         include_str!("../../../schemas/examples/multi-bit.json"),
+        include_str!("../../../schemas/examples/sliced-bus.json"),
     ] {
         CircuitDocument::from_json(input).expect("Phase 0 example must stay compatible");
     }

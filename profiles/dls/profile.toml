@@ -16,20 +16,28 @@ required_files = ["ProjectDescription.json"]
 required_dirs = ["Chips"]
 
 [support]
-# The subset converted in this phase.
+# The subset converted today.
 primitives = ["NAND"]
-bit_width = 1
+bit_width = "any"
 combinational_only = true
+# Bus split/merge, expressed as canonical schema v1.1 slices. These emit no
+# logic: a narrow pin is bound to the bits of the wide pin it names.
+bus_converters = ["X-YBIT"]      # e.g. 8-1BIT, 1-8BIT, 8-4BIT, 4-8BIT, 4-1BIT, 1-4BIT
+bus_routing = ["BUS-N", "BUS-TERMINUS-N"]
+# Both split and merge order their narrow pins most significant first.
+bus_bit_order = "msb-first"
 
 # Constructs that produce a precise diagnostic and stop conversion (never
-# silently skipped). Multi-bit buses, sequential, and hierarchical emission are
-# staged follow-up phases (see docs/profiles.md).
+# silently skipped). Sequential elements and hierarchical emission are staged
+# follow-up phases (see ../../docs/profiles.md).
 [support.rejected]
-multi_bit_pins = true
+mixed_width_wires = true
 builtins = [
     "CLOCK", "PULSE", "KEY", "3-STATE BUFFER",
-    "BUS-1", "BUS-4", "BUS-8",
-    "1-4BIT", "1-8BIT", "4-8BIT", "4-1BIT", "8-4BIT", "8-1BIT",
     "7-SEGMENT", "DOT DISPLAY", "RGB DISPLAY", "LED",
     "ROM 256x16",
 ]
+# Not a rejection but a consequence: DLS registers and RAM are NAND latches,
+# which are genuine combinational cycles for this kernel and are reported by
+# the kernel as GRAPH_COMBINATIONAL_CYCLE.
+nand_latches = "reported as a combinational cycle" 

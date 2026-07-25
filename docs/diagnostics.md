@@ -87,8 +87,8 @@ info never block future compilation.
 | `SLICE_REQUIRES_SCHEMA_1_1` | error | A sliced connection appears in a document declaring `schemaVersion` `1.0`. | A `1.0` document uses `{"net":"n","msb":3,"lsb":0}`. | Declare `1.1`, or connect the whole net. |
 | `CONST_LITERAL_MALFORMED` | error | CONST `value` is not a non-empty string of only `0`/`1`. | `"10x1"` or numeric `3`. | Use an exact binary string. |
 | `CONST_VALUE_WIDTH_MISMATCH` | error | A valid binary CONST literal does not contain exactly `width` digits. | `"11"` at width 4. | Include one digit per bit, including leading zeroes. |
-| `NET_MULTIPLE_DRIVERS` | error | More than one external input/component output drives a net. | Input and CONST both drive `net-a`. | Leave exactly one driver. |
-| `NET_NO_DRIVER` | error | A net has consumers but no driver. Related sources identify external outputs and/or component inputs. | Output port consumes an undriven net. | Add an external input, component output, or CONST driver. |
+| `NET_MULTIPLE_DRIVERS` | error | More than one external input/component output drives the same **bit** of a net. | Input and CONST both drive `net-a`. | Leave exactly one driver per bit. |
+| `NET_NO_DRIVER` | error | A **bit** of a net is consumed but not driven. Related sources identify external outputs and/or component inputs. | Output port consumes an undriven net. | Add an external input, component output, or CONST driver. |
 | `NET_NO_CONSUMERS` | warning | A driven net has no external-output/component-input consumers. This is also the V1 policy for an unused required component output. | Gate output is unobserved. | Connect a useful consumer or remove the driver. |
 | `NET_UNUSED` | warning | A declared net has neither drivers nor consumers. | Orphan net declaration. | Remove or connect the net. |
 | `GRAPH_COMBINATIONAL_CYCLE` | error | A strongly connected component has multiple nodes or a self-edge. | Buffers feed each other. | Break feedback; V1 is acyclic combinational logic. |
@@ -111,6 +111,21 @@ Parser/schema diagnostics retain the Phase 1 families `PARSE_*`, `VERSION_*`, an
 - More than one driver is an error.
 - A driven net without consumers is a warning.
 - A fully unused declared net is a warning.
+### Drive is resolved per bit
+
+Since schema `1.1` a connection may address a slice of a net, so both drive
+diagnostics operate on bits rather than whole nets. Two components driving
+different bits of one net is legal — that is what a bus merger is — while any
+overlap on a shared bit is still `NET_MULTIPLE_DRIVERS`.
+
+Messages name the narrowest thing that is wrong: `Net 'n'` when the whole net
+is at fault or the net is one bit wide, otherwise `Bit 3 of net 'n'` or
+`Bits [7:4] of net 'n'`. A one-bit document therefore reads exactly as it did
+before slices existed.
+
+`NET_UNUSED` and `NET_NO_CONSUMERS` stay whole-net warnings, so a wide net with
+one spare bit does not emit a diagnostic per bit.
+
 - The single `NET_NO_DRIVER` diagnostic uses related sources to distinguish an
   undriven external output from an undriven required component input, avoiding
   redundant cascaded errors for the same electrical fact.

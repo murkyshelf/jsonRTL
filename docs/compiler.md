@@ -52,7 +52,11 @@ subset of Verilog-2001:
 - boundary assignments between module ports and normalized internal nets;
 - one continuous assignment per component, including width-qualified binary CONST
   literals;
+- bit-select and part-select operands, `n[3]` and `n[7:4]`, on either side of an
+  assignment, wherever the canonical connection carries a schema v1.1 slice;
 - fixed spaces, blank lines, and LF line endings.
+
+`tests/golden/sliced-bus.v` pins the slice forms byte-exactly.
 
 The supported expressions cover `AND`, `OR`, `XOR`, `XNOR`, `NAND`, `NOR`, `NOT`,
 `BUFFER`, and `CONST`. Array order, UI metadata, clocks, timestamps, randomness, and

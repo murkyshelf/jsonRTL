@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.1",
+  "circuit": {
+    "id": "nibble-swap-8",
+    "name": "Eight-bit Nibble Swap",
+    "ports": [
+      {
+        "id": "input-data",
+        "name": "data_in",
+        "direction": "input",
+        "width": 8,
+        "netId": "net-data"
+      },
+      {
+        "id": "output-data",
+        "name": "data_out",
+        "direction": "output",
+        "width": 8,
+        "netId": "net-result"
+      }
+    ],
+    "components": [
+      {
+        "id": "low-to-high",
+        "name": "low_to_high",
+        "type": "BUFFER",
+        "width": 4,
+        "connections": {
+          "A": { "net": "net-data", "msb": 3, "lsb": 0 },
+          "Y": { "net": "net-result", "msb": 7, "lsb": 4 }
+        },
+        "parameters": {}
+      },
+      {
+        "id": "high-to-low",
+        "name": "high_to_low",
+        "type": "BUFFER",
+        "width": 4,
+        "connections": {
+          "A": { "net": "net-data", "msb": 7, "lsb": 4 },
+          "Y": { "net": "net-result", "msb": 3, "lsb": 0 }
+        },
+        "parameters": {}
+      }
+    ],
+    "nets": [
+      { "id": "net-data", "name": "data", "width": 8 },
+      { "id": "net-result", "name": "result", "width": 8 }
+    ]
+  }
+}

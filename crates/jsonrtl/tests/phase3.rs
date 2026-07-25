@@ -10,12 +10,13 @@ const FULL_ADDER: &str = include_str!("../../../tests/fixtures/valid/full-adder.
 const EIGHT_BIT: &str = include_str!("../../../tests/fixtures/valid/eight-bit.json");
 const CONST_EXAMPLE: &str = include_str!("../../../tests/fixtures/valid/const.json");
 const EVERY_GATE: &str = include_str!("../../../tests/fixtures/valid/every-gate.json");
+const SLICED_BUS: &str = include_str!("../../../tests/fixtures/valid/sliced-bus.json");
 const SANITIZED_COLLISIONS: &str =
     include_str!("../../../tests/fixtures/valid/sanitized-collisions.json");
 const COMBINED_INVALID: &str =
     include_str!("../../../tests/fixtures/semantic/combined-invalid.json");
 
-const GOLDEN_CASES: [(&str, &str, &str); 7] = [
+const GOLDEN_CASES: [(&str, &str, &str); 8] = [
     (
         "minimal AND",
         MINIMAL_AND,
@@ -35,6 +36,11 @@ const GOLDEN_CASES: [(&str, &str, &str); 7] = [
         "8-bit circuit",
         EIGHT_BIT,
         include_str!("../../../tests/golden/eight-bit.v"),
+    ),
+    (
+        "sliced bus",
+        SLICED_BUS,
+        include_str!("../../../tests/golden/sliced-bus.v"),
     ),
     (
         "CONST",

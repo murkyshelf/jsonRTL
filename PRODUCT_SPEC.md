@@ -36,7 +36,7 @@ The external input is a UTF-8 JSON document with this root shape:
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "circuit": {
     "id": "stable-circuit-id",
     "name": "Display name",
@@ -73,7 +73,8 @@ A component has:
 - `name`: display name; it is not identity
 - `type`: one of the V1 component types
 - `width`: positive integer applied to every logical port on that component
-- `connections`: object mapping the component's logical port names to net IDs
+- `connections`: object mapping the component's logical port names to a net ID,
+  or (schema `1.1` and later) to a contiguous bit slice `{ net, msb, lsb }`
 - `parameters`: object containing only parameters defined by its catalog entry
 
 A net has:
@@ -89,9 +90,15 @@ output ports are drivers.
 
 For a valid V1 circuit, every referenced ID exists, IDs are unique within their
 kind, every required logical port is connected exactly once, connected widths are
-equal, each net has exactly one driver and at least one sink, and the component graph
-is acyclic. There are no implicit casts, slices, concatenations, width extension, or
-truncation.
+equal, every bit of a net has exactly one driver, every consumed bit has a driver,
+and the component graph is acyclic. There are no implicit casts, concatenations,
+width extension, or truncation.
+
+Drive is resolved **per bit**, not per net. A slice lets two components drive
+different bits of one net — which is what a bus merger is — while two connections
+that overlap on any bit remain a multiple-driver error. Cycle detection likewise
+follows bits, so routing one bit of a net out and a different bit back in is not a
+cycle.
 
 ### Outputs by release stage
 
@@ -106,8 +113,12 @@ misleading Verilog.
 
 ## Versioning policy
 
-`schemaVersion` is a string in `MAJOR.MINOR` form. V1 implementation initially
-accepts exactly `1.0`.
+`schemaVersion` is a string in `MAJOR.MINOR` form. This implementation accepts
+`1.0` and `1.1`, and emits `1.1`.
+
+`1.1` adds sliced connections. It is a minor version because it only adds
+optional behavior: every `1.0` document remains valid and means exactly what it
+did, and a document declaring `1.0` may not use a slice.
 
 - A major version may remove fields, change meaning, or otherwise break clients.
 - A minor version may add explicitly optional behavior without reinterpreting an
@@ -168,7 +179,8 @@ The following are not V1 and must not leak into the V1 public contract:
 - Simulation, test vectors, waveform history, or VCD
 - Hierarchy or reusable submodules
 - Arbitrary user-authored Verilog
-- Variable-input gates, slicing, concatenation, or implicit width conversion
+- Variable-input gates, concatenation expressions, or implicit width conversion
+  (contiguous bit *slices* arrived in schema `1.1`)
 - WebAssembly and a visual editor
 - Invoking Yosys or LibreLane, choosing a PDK, or producing GDSII
 

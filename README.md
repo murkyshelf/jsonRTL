@@ -31,13 +31,43 @@ See `docs/profiles.md`.
 
 Simulation and physical-design execution are intentionally not implemented yet.
 
+## Install the CLI
+
+```sh
+cargo install --path crates/jsonrtl-cli --locked
+```
+
+Installs `jsonrtl` into `$CARGO_HOME/bin` (usually `~/.cargo/bin`), which must
+be on your `PATH`; use `--root ~/.local` to install elsewhere. During
+development, `cargo run -p jsonrtl-cli -- <args>` needs no install and always
+rebuilds first.
+
+## Quick start
+
+```sh
+# What formats can be imported?
+jsonrtl profiles
+
+# Compile one chip from a Digital-Logic-Sim project to Verilog.
+jsonrtl import ~/path/to/DLS/Projects/test --chip OR --stdout
+
+# Compile a whole project, emitting everything that compiles and
+# reporting the rest.
+jsonrtl import ~/path/to/DLS/Projects/test --out build/ --skip-unsupported
+```
+
+`import` takes the project **directory** and auto-detects the profile.
+`validate` and `compile` operate on canonical circuit JSON instead — see
+`docs/cli.md` for which command fits which file.
+
 ## Workspace
 
 - `crates/jsonrtl`: transport-free model, parser, validator, IR, and compiler
 - `crates/jsonrtl-cli`: command-line shell depending on `jsonrtl`
 - `crates/jsonrtl-api`: Axum service shell depending on `jsonrtl`
-- `crates/jsonrtl-profiles`: foreign-format import profiles (e.g. DLS)
+- `crates/jsonrtl-profiles`: foreign-format import profiles (DLS, Logisim)
   depending on `jsonrtl`
+- `profiles`: per-profile manifest, documentation, and example projects
 - `schemas`: canonical schema and illustrative contract examples
 - `tests/fixtures`: parser, semantic-validation, and compiler fixtures
 - `tests/golden`: byte-exact Verilog-2001 compiler expectations

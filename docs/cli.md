@@ -1,5 +1,28 @@
 # `jsonrtl` CLI Reference
 
+## Installation
+
+```sh
+cargo install --path crates/jsonrtl-cli --locked
+```
+
+This builds in release mode and installs the binary as `jsonrtl` in
+`$CARGO_HOME/bin` (usually `~/.cargo/bin`), which must be on your `PATH`.
+Install elsewhere with `--root`, e.g. `--root ~/.local`.
+
+The crate is `publish = false`, so `cargo install jsonrtl-cli` from a registry
+does not work; `--path` is the only route.
+
+For development, run without installing:
+
+```sh
+cargo run -p jsonrtl-cli -- import <PROJECT> --out build/
+```
+
+If you invoke `target/release/jsonrtl` directly, remember it is only as current
+as your last `cargo build --release` — `cargo run` and `cargo install` rebuild
+for you, a stale path does not.
+
 ## Commands
 
 | Command | Description |
@@ -8,7 +31,32 @@
 | `compile CIRCUIT` | Compile a canonical circuit document to deterministic Verilog-2001. |
 | `import PROJECT_DIR` | Import a foreign project (e.g. DLS) and compile each unit to Verilog. |
 | `profiles` | List the import profiles available in this build. |
-| `schema` | Print the canonical circuit JSON Schema v1.0 to stdout. |
+| `schema` | Print the canonical circuit JSON Schema to stdout. |
+
+## Which command do I want?
+
+The commands split by **what kind of file you have**.
+
+| You have | Use | Note |
+|----------|-----|------|
+| A DLS project directory, or a Logisim `.circ` | `import` | Converts *and* compiles in one step |
+| A canonical circuit JSON document | `validate` or `compile` | The kernel's own format |
+
+`import` takes the **project directory**, not one chip file, and picks the
+profile automatically:
+
+```sh
+jsonrtl import ~/path/to/DLS/Projects/test --chip OR --stdout
+```
+
+`--profile` belongs to `import` alone; it is not a global option, and
+`validate` has no use for it. To validate a foreign chip you must convert it
+first:
+
+```sh
+jsonrtl import <PROJECT> --chip OR --out build/ --emit-canonical canon/
+jsonrtl validate canon/OR.json
+```
 
 ## Global Options
 
