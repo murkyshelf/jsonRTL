@@ -6,7 +6,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use jsonrtl::{
     CIRCUIT_V1_SCHEMA, CircuitDocument, CompileOptions, Diagnostic, DiagnosticCode,
     DiagnosticSeverity, Kernel, ParseError, SUPPORTED_SCHEMA_VERSION, ValidationReport,
@@ -39,8 +39,12 @@ struct Cli {
     )]
     diagnostics: DiagnosticFormat,
 
+    /// List the import profiles available in this build and exit.
+    #[arg(long, global = true)]
+    list_profiles: bool,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -90,14 +94,19 @@ struct CompileArgs {
 #[derive(Debug, Args)]
 struct ImportArgs {
     /// Foreign project directory to import.
-    project: PathBuf,
+    #[arg(required_unless_present = "list_profiles")]
+    project: Option<PathBuf>,
 
     /// Import profile id. Auto-detected when omitted.
     #[arg(long, value_name = "ID")]
     profile: Option<String>,
 
     /// Directory to write one `<ChipName>.v` per compiled unit.
-    #[arg(long, value_name = "DIR", required_unless_present = "stdout")]
+    #[arg(
+        long,
+        value_name = "DIR",
+        required_unless_present_any = ["stdout", "list_profiles"]
+    )]
     out: Option<PathBuf>,
 
     /// Restrict to a single unit by name.
@@ -152,7 +161,21 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<(), u8> {
-    match cli.command {
+    // `--list-profiles` is global, so it answers the question wherever it is
+    // asked: bare, or alongside the `import` command it informs.
+    if cli.list_profiles {
+        print_profiles(cli.diagnostics);
+        return Ok(());
+    }
+
+    let Some(command) = cli.command else {
+        let mut help = Cli::command();
+        let _ = help.print_help();
+        println!();
+        return Err(EXIT_INVALID);
+    };
+
+    match command {
         Command::Validate(arguments) => validate_command(arguments, cli.diagnostics),
         Command::Compile(arguments) => compile_command(arguments, cli.diagnostics),
         Command::Import(arguments) => import_command(arguments, cli.diagnostics),
@@ -239,7 +262,12 @@ fn compile_command(arguments: CompileArgs, format: DiagnosticFormat) -> Result<(
 }
 
 fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(), u8> {
-    let profile = select_profile(&arguments).map_err(|failure| {
+    // `--list-profiles` short-circuits in `run`, so a project is present here.
+    let project = arguments
+        .project
+        .clone()
+        .expect("clap requires PROJECT unless --list-profiles");
+    let profile = select_profile(&arguments, &project).map_err(|failure| {
         let code = failure.exit_code;
         render_failure(format, &failure);
         code
@@ -249,7 +277,7 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
     // failure cannot hide the units that do work. Every skip is reported.
     let mut skipped: Vec<SkippedUnit> = Vec::new();
     let (project_name, selected) = if arguments.skip_unsupported {
-        let units = profile.units(&arguments.project).map_err(|error| {
+        let units = profile.units(&project).map_err(|error| {
             let failure = profile_failure(error);
             let code = failure.exit_code;
             render_failure(format, &failure);
@@ -257,7 +285,7 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         })?;
         let mut kept = Vec::new();
         for unit in &units.unit_names {
-            match profile.convert_unit(&arguments.project, unit) {
+            match profile.convert_unit(&project, unit) {
                 Ok(conversion) => kept.extend(conversion.circuits),
                 Err(error) => skipped.push(SkippedUnit {
                     unit: unit.clone(),
@@ -270,8 +298,8 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         // Select before converting. Converting the whole project first would
         // let an unsupported chip fail a `--chip` run for an unrelated unit.
         let conversion = match &arguments.chip {
-            Some(name) => profile.convert_unit(&arguments.project, name),
-            None => profile.convert(&arguments.project),
+            Some(name) => profile.convert_unit(&project, name),
+            None => profile.convert(&project),
         }
         .map_err(|error| {
             let failure = profile_failure(error);
@@ -479,21 +507,34 @@ fn first_error_message(report: &jsonrtl::ValidationReport) -> String {
         )
 }
 
-fn select_profile(arguments: &ImportArgs) -> Result<Box<dyn Profile>, CliFailure> {
+/// The ids a caller may pass to `--profile`, for error messages.
+fn available_profile_ids() -> String {
+    registry()
+        .iter()
+        .map(|profile| profile.id())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn select_profile(arguments: &ImportArgs, project: &Path) -> Result<Box<dyn Profile>, CliFailure> {
     match &arguments.profile {
         Some(id) => profile_by_id(id).ok_or_else(|| CliFailure {
             stage: "import",
             category: "unknown_profile",
-            message: format!("no import profile with id '{id}'"),
+            message: format!(
+                "no import profile with id '{id}'; available ids are {}. Run 'jsonrtl profiles' for details",
+                available_profile_ids()
+            ),
             diagnostics: Value::Array(Vec::new()),
             exit_code: EXIT_INVALID,
         }),
-        None => detect_profile(&arguments.project).ok_or_else(|| CliFailure {
+        None => detect_profile(project).ok_or_else(|| CliFailure {
             stage: "import",
             category: "profile_detection",
             message: format!(
-                "could not detect an import profile for '{}'; pass --profile",
-                arguments.project.display()
+                "could not detect an import profile for '{}'; pass --profile with one of {}. Run 'jsonrtl profiles' for details",
+                project.display(),
+                available_profile_ids()
             ),
             diagnostics: Value::Array(Vec::new()),
             exit_code: EXIT_INVALID,

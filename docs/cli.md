@@ -15,6 +15,12 @@
 | Option | Values | Default |
 |--------|--------|---------|
 | `--diagnostics` | `human`, `json` | `human` |
+| `--list-profiles` | flag | off |
+
+`--list-profiles` prints the import profiles in this build and exits. It is
+global, so it works bare (`jsonrtl --list-profiles`) or alongside the command it
+informs (`jsonrtl import --list-profiles`), and in that form needs neither a
+project nor `--out`.
 
 Diagnostics are always written to **stderr**. Generated Verilog and schema output go to **stdout**.
 
@@ -80,13 +86,18 @@ jsonrtl import ~/my-dls-project --out build/ --skip-unsupported
 
 ## Listing Profiles
 
-`profiles` prints each import profile in the build with its source tool,
-expected input layout, supported subset, and maturity.
+Each import profile reports its source tool, expected input layout, supported
+subset, and maturity. Three equivalent forms print it:
 
 ```sh
-jsonrtl profiles
-jsonrtl --diagnostics json profiles     # machine-readable
+jsonrtl profiles                      # subcommand
+jsonrtl --list-profiles               # global flag
+jsonrtl import --list-profiles        # while reaching for import
+jsonrtl --diagnostics json profiles   # machine-readable
 ```
+
+`--profile` errors also name the ids that do exist, so a typo is
+self-correcting.
 
 A profile marked `experimental` has been implemented from the file format but
 not yet calibrated against real exports from the tool.

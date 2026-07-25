@@ -190,6 +190,10 @@ fn run<const N: usize>(arguments: [&str; N]) -> Output {
     Command::new(binary()).args(arguments).output().unwrap()
 }
 
+fn run_args(arguments: &[&str]) -> Output {
+    Command::new(binary()).args(arguments).output().unwrap()
+}
+
 fn dls_project(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../jsonrtl-profiles/tests/fixtures/dls")
@@ -327,4 +331,65 @@ fn profiles_json_is_machine_readable() {
             );
         }
     }
+}
+
+#[test]
+fn list_profiles_flag_works_bare_and_on_import() {
+    // The same listing must be reachable however it is asked for: as a
+    // subcommand, as a bare flag, or alongside the command it informs.
+    let subcommand = String::from_utf8_lossy(&run(["profiles"]).stdout).into_owned();
+
+    for arguments in [
+        ["--list-profiles"].as_slice(),
+        ["import", "--list-profiles"].as_slice(),
+    ] {
+        let output = run_args(arguments);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{arguments:?} stderr: {}",
+            stderr(&output)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            subcommand,
+            "{arguments:?} printed a different listing"
+        );
+    }
+}
+
+#[test]
+fn list_profiles_on_import_does_not_need_a_project_or_output() {
+    // The flag answers a question about the build, not about any project, so
+    // it must not demand the arguments an actual import would.
+    let output = run(["import", "--list-profiles"]);
+    assert_eq!(output.status.code(), Some(0), "stderr: {}", stderr(&output));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("dls"));
+}
+
+#[test]
+fn an_unknown_profile_id_names_the_ids_that_do_exist() {
+    let output = run([
+        "import",
+        dls_project("test").to_str().unwrap(),
+        "--profile",
+        "nope",
+        "--chip",
+        "AND",
+        "--stdout",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    let text = stderr(&output);
+    assert!(text.contains("dls"), "{text}");
+    assert!(text.contains("logisim"), "{text}");
+    assert!(text.contains("jsonrtl profiles"), "{text}");
+}
+
+#[test]
+fn no_command_prints_help_and_fails() {
+    let output = run_args(&[]);
+    assert_eq!(output.status.code(), Some(2));
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(text.contains("Usage:"), "{text}");
+    assert!(text.contains("--list-profiles"), "{text}");
 }

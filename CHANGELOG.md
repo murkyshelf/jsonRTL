@@ -55,9 +55,11 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   failing on the first that does not. Each skipped unit is reported with its
   reason and the run still exits `2`, so a partial import is never mistaken for
   a complete one.
-- **`jsonrtl profiles`**: list the import profiles in the build with their
-  source tool, expected input layout, supported subset, and maturity. Also
-  available as `--diagnostics json`.
+- **Profile discovery**: `jsonrtl profiles`, the global `--list-profiles` flag,
+  and `jsonrtl import --list-profiles` all print the import profiles in the
+  build with their source tool, expected input layout, supported subset, and
+  maturity. Available as `--diagnostics json` too, and `--profile` errors now
+  name the ids that do exist.
 
 ### Fixed
 
