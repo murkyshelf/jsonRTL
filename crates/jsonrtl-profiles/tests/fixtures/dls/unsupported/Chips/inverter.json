@@ -1,0 +1,20 @@
+{
+  "Name": "inverter",
+  "InputPins": [{ "Name": "a", "ID": 10, "BitCount": 1 }],
+  "OutputPins": [{ "Name": "y", "ID": 11, "BitCount": 1 }],
+  "SubChips": [{ "Name": "NAND", "ID": 12 }],
+  "Wires": [
+    {
+      "SourcePinAddress": { "PinID": 0, "PinOwnerID": 10 },
+      "TargetPinAddress": { "PinID": 0, "PinOwnerID": 12 }
+    },
+    {
+      "SourcePinAddress": { "PinID": 0, "PinOwnerID": 10 },
+      "TargetPinAddress": { "PinID": 1, "PinOwnerID": 12 }
+    },
+    {
+      "SourcePinAddress": { "PinID": 2, "PinOwnerID": 12 },
+      "TargetPinAddress": { "PinID": 0, "PinOwnerID": 11 }
+    }
+  ]
+}

@@ -233,35 +233,20 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         code
     })?;
 
-    let conversion = profile.convert(&arguments.project).map_err(|error| {
+    // Select before converting. Converting the whole project first would let an
+    // unsupported chip anywhere in it fail a `--chip` run for an unrelated unit.
+    let conversion = match &arguments.chip {
+        Some(name) => profile.convert_unit(&arguments.project, name),
+        None => profile.convert(&arguments.project),
+    }
+    .map_err(|error| {
         let failure = profile_failure(error);
         let code = failure.exit_code;
         render_failure(format, &failure);
         code
     })?;
 
-    // Select which units to emit.
-    let selected: Vec<&NamedCircuit> = match &arguments.chip {
-        Some(name) => match conversion
-            .circuits
-            .iter()
-            .find(|circuit| &circuit.name == name)
-        {
-            Some(circuit) => vec![circuit],
-            None => {
-                let failure = CliFailure {
-                    stage: "import",
-                    category: "unknown_unit",
-                    message: format!("no unit named '{name}' in project"),
-                    diagnostics: Value::Array(Vec::new()),
-                    exit_code: EXIT_INVALID,
-                };
-                render_failure(format, &failure);
-                return Err(EXIT_INVALID);
-            }
-        },
-        None => conversion.circuits.iter().collect(),
-    };
+    let selected: Vec<&NamedCircuit> = conversion.circuits.iter().collect();
 
     // Compile each selected unit.
     let mut outputs: Vec<(&str, String)> = Vec::with_capacity(selected.len());
@@ -428,6 +413,7 @@ fn profile_failure(error: ProfileError) -> CliFailure {
         ProfileError::Unsupported { .. } => ("unsupported", EXIT_INVALID),
         ProfileError::Structure { .. } => ("structure", EXIT_INVALID),
         ProfileError::Limit { .. } => ("resource_limit", EXIT_INVALID),
+        ProfileError::UnknownUnit { .. } => ("unknown_unit", EXIT_INVALID),
     };
     CliFailure {
         stage: "import",

@@ -43,6 +43,25 @@ impl crate::Profile for DlsProfile {
             circuits,
         })
     }
+
+    fn convert_unit(&self, path: &Path, unit: &str) -> Result<ProjectConversion, ProfileError> {
+        let project = model::load_project(path)?;
+        if !project.chip_names.iter().any(|name| name == unit) {
+            return Err(ProfileError::UnknownUnit {
+                unit: unit.to_string(),
+            });
+        }
+        // Elaboration walks only this chip's dependency closure, so an
+        // unsupported chip elsewhere in the project cannot fail this call.
+        let flat = elaborate::elaborate(&project, unit)?;
+        Ok(ProjectConversion {
+            project_name: project.name,
+            circuits: vec![NamedCircuit {
+                name: unit.to_string(),
+                document: lower::lower(unit, &flat),
+            }],
+        })
+    }
 }
 
 #[cfg(test)]
@@ -117,5 +136,44 @@ mod tests {
     fn convert_surfaces_unsupported_construct() {
         let error = DlsProfile.convert(&fixture("unsupported")).unwrap_err();
         assert!(matches!(error, ProfileError::Unsupported { .. }));
+    }
+
+    #[test]
+    fn one_unsupported_chip_does_not_block_a_supported_sibling() {
+        // Whole-project conversion fails: `clocky` and `wide` are unsupported.
+        assert!(DlsProfile.convert(&fixture("unsupported")).is_err());
+
+        // Asking for a supported chip in the same project still succeeds.
+        let conversion = DlsProfile
+            .convert_unit(&fixture("unsupported"), "inverter")
+            .expect("supported chip converts despite unsupported siblings");
+        assert_eq!(conversion.project_name, "unsupported");
+        assert_eq!(conversion.circuits.len(), 1);
+        assert_eq!(conversion.circuits[0].name, "inverter");
+        let result = Kernel::default()
+            .compile_verilog(&conversion.circuits[0].document, &CompileOptions::default());
+        assert!(result.has_output(), "{:?}", result.diagnostics);
+    }
+
+    #[test]
+    fn convert_unit_reports_an_unknown_chip() {
+        let error = DlsProfile
+            .convert_unit(&fixture("unsupported"), "nope")
+            .unwrap_err();
+        match error {
+            ProfileError::UnknownUnit { unit } => assert_eq!(unit, "nope"),
+            other => panic!("expected UnknownUnit, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn convert_unit_still_fails_on_the_chip_that_was_asked_for() {
+        let error = DlsProfile
+            .convert_unit(&fixture("unsupported"), "clocky")
+            .unwrap_err();
+        match error {
+            ProfileError::Unsupported { chip, .. } => assert_eq!(chip, "clocky"),
+            other => panic!("expected Unsupported, got {other:?}"),
+        }
     }
 }

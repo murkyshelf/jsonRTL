@@ -59,6 +59,10 @@ pub enum ProfileError {
     /// work is performed so a hostile or runaway project cannot exhaust memory.
     #[error("resource limit exceeded in chip '{chip}': {detail}")]
     Limit { chip: String, detail: String },
+
+    /// A caller asked for a unit the project does not contain.
+    #[error("no unit named '{unit}' in project")]
+    UnknownUnit { unit: String },
 }
 
 /// Returns true when `name` is safe to use as a single file-name component.
@@ -94,6 +98,14 @@ pub trait Profile {
 
     /// Converts a project directory into canonical documents.
     fn convert(&self, path: &Path) -> Result<ProjectConversion, ProfileError>;
+
+    /// Converts exactly one unit and the units it depends on, returning a
+    /// conversion holding just that circuit.
+    ///
+    /// A unit the caller did not ask for cannot fail this call. Real projects
+    /// accumulate chips that use constructs outside the supported subset, and
+    /// one of them must not make every other chip unreachable.
+    fn convert_unit(&self, path: &Path, unit: &str) -> Result<ProjectConversion, ProfileError>;
 }
 
 /// Every profile known to this build, in stable order.
