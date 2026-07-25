@@ -28,9 +28,12 @@ validation, normalized IR, generation, or simulation semantics.
 ```text
 logic-kernel/
 ├── crates/
-│   ├── logic-kernel/       public model, validation, IR, compiler; reusable library
-│   ├── logic-kernel-cli/   local process boundary; depends on logic-kernel
-│   └── logic-kernel-api/   Axum transport boundary; depends on logic-kernel
+│   ├── logic-kernel/          public model, validation, IR, compiler; reusable library
+│   ├── logic-kernel-cli/      local process boundary; depends on logic-kernel
+│   ├── logic-kernel-api/      Axum transport boundary; depends on logic-kernel
+│   └── logic-kernel-profiles/ foreign-format import profiles; depends on logic-kernel
+├── profiles/
+│   └── dls/                   per-profile manifest, docs, and fixtures
 ├── schemas/
 │   ├── circuit-v1.schema.json
 │   └── examples/
@@ -55,12 +58,18 @@ the library.
 UI application --> UI adapter --> canonical JSON schema/model
 CLI ---------------------------------------> logic-kernel
 REST API ----------------------------------> logic-kernel
+import profiles ---------------------------> logic-kernel
 future WASM wrapper -----------------------> logic-kernel
 future simulator extension ---------------> normalized kernel contracts
 future physical-design orchestrator ------> compiler artifacts
 
-logic-kernel -X-> CLI / REST / UI / Axum / Tokio / Clap / Yosys / LibreLane
+logic-kernel -X-> CLI / REST / profiles / UI / Axum / Tokio / Clap / Yosys / LibreLane
 ```
+
+Import profiles are the server-side analogue of a UI adapter: they map a foreign
+project format onto canonical JSON. Like a UI adapter, a profile may not ask the
+kernel to infer connectivity from coordinates or reinterpret layout as logic; it
+produces canonical documents the kernel validates and compiles unchanged.
 
 The core library may depend on narrowly scoped parsing, schema, serialization, error,
 and data-structure crates. It may not call a transport, filesystem-specific service,

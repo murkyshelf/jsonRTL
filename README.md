@@ -21,6 +21,12 @@ Phases 1 through 3 are implemented:
 - Byte-exact golden coverage for gates, adders, vectors, constants, and sanitization
 - CLI and Axum service shells over the reusable core crate
 
+The **format-import profiles** subsystem (`logic-kernel-profiles` crate)
+converts third-party project formats into canonical documents. The first profile
+imports Sebastian Lague's Digital-Logic-Sim (DLS): the CLI `import` command reads
+a project directory, flattens each hierarchical chip to NAND primitives, and
+compiles one `.v` per chip. See `docs/profiles.md`.
+
 Simulation and physical-design execution are intentionally not implemented yet.
 
 ## Workspace
@@ -28,6 +34,8 @@ Simulation and physical-design execution are intentionally not implemented yet.
 - `crates/logic-kernel`: transport-free model, parser, validator, IR, and compiler
 - `crates/logic-kernel-cli`: command-line shell depending on `logic-kernel`
 - `crates/logic-kernel-api`: Axum service shell depending on `logic-kernel`
+- `crates/logic-kernel-profiles`: foreign-format import profiles (e.g. DLS)
+  depending on `logic-kernel`
 - `schemas`: canonical schema and illustrative contract examples
 - `tests/fixtures`: parser, semantic-validation, and compiler fixtures
 - `tests/golden`: byte-exact Verilog-2001 compiler expectations

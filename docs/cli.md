@@ -6,6 +6,7 @@
 |---------|-------------|
 | `validate CIRCUIT` | Validate a canonical circuit document against schema and semantic rules. |
 | `compile CIRCUIT` | Compile a canonical circuit document to deterministic Verilog-2001. |
+| `import PROJECT_DIR` | Import a foreign project (e.g. DLS) and compile each unit to Verilog. |
 | `schema` | Print the canonical circuit JSON Schema v1.0 to stdout. |
 
 ## Global Options
@@ -34,6 +35,35 @@ Diagnostics are always written to **stderr**. Generated Verilog and schema outpu
 | `--force` | Permit replacing an existing `--output` file. Requires `--output`. |
 
 At least one of `--output` or `--stdout` must be provided. `--stdout` and `--output` are mutually exclusive.
+
+## Import Options
+
+`import` converts a third-party project format into canonical circuit documents
+(via a *profile*) and compiles each unit to Verilog. See `docs/profiles.md`.
+
+| Option | Description |
+|--------|-------------|
+| `--profile ID` | Import profile id (e.g. `dls`). Auto-detected from the directory when omitted. |
+| `--out DIR` | Write one `<UnitName>.v` per compiled unit into DIR. Required unless `--stdout`. |
+| `--chip NAME` | Restrict to a single unit by name. |
+| `--stdout` | Write a single unit's Verilog to stdout. Requires `--chip`; conflicts with `--out`. |
+| `--emit-canonical DIR` | Also write the intermediate canonical JSON per unit into DIR. |
+| `--force` | Permit existing output files to be atomically replaced. |
+
+Output files are written with the same atomic, overwrite-protected policy as
+`compile`. Conversion failures (unsupported constructs, malformed input) exit
+with code `2`; unreadable inputs or unwritable outputs exit with code `3`.
+
+```sh
+# Import a DLS project: one <ChipName>.v per chip, mirroring the project.
+logic-kernel import profiles/dls/example --out build/verilog
+
+# Print a single chip to stdout.
+logic-kernel import profiles/dls/example --chip AND --stdout
+
+# Also emit the canonical JSON handed to the compiler.
+logic-kernel import profiles/dls/example --out build/v --emit-canonical build/canon
+```
 
 ## Overwrite Policy
 

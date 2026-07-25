@@ -1,0 +1,35 @@
+# Import profile manifest — Sebastian Lague's Digital-Logic-Sim (DLS).
+#
+# This manifest is metadata and documentation. The authoritative converter is
+# the Rust `dls` module in the `logic-kernel-profiles` crate; see
+# `../../docs/profiles.md`.
+
+[profile]
+id = "dls"
+name = "Sebastian Lague Digital-Logic-Sim"
+version = "0.1.0"
+source_format = "DLS project directory: ProjectDescription.json + Chips/*.json"
+
+[detection]
+# A directory is treated as a DLS project when it contains all of these.
+required_files = ["ProjectDescription.json"]
+required_dirs = ["Chips"]
+
+[support]
+# The subset converted in this phase.
+primitives = ["NAND"]
+bit_width = 1
+combinational_only = true
+
+# Constructs that produce a precise diagnostic and stop conversion (never
+# silently skipped). Multi-bit buses, sequential, and hierarchical emission are
+# staged follow-up phases (see docs/profiles.md).
+[support.rejected]
+multi_bit_pins = true
+builtins = [
+    "CLOCK", "PULSE", "KEY", "3-STATE BUFFER",
+    "BUS-1", "BUS-4", "BUS-8",
+    "1-4BIT", "1-8BIT", "4-8BIT", "4-1BIT", "8-4BIT", "8-1BIT",
+    "7-SEGMENT", "DOT DISPLAY", "RGB DISPLAY", "LED",
+    "ROM 256x16",
+]
