@@ -11,6 +11,7 @@ use logic_kernel::{
     CIRCUIT_V1_SCHEMA, CircuitDocument, CompileOptions, Diagnostic, DiagnosticCode, Kernel,
     ParseError, SUPPORTED_SCHEMA_VERSION, ValidationReport,
 };
+use logic_kernel_profiles::{NamedCircuit, Profile, ProfileError, detect_profile, profile_by_id};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -52,6 +53,8 @@ enum Command {
     Validate(InputArgs),
     /// Compile a canonical circuit document to deterministic Verilog-2001.
     Compile(CompileArgs),
+    /// Import a foreign project (e.g. DLS) and compile each unit to Verilog.
+    Import(ImportArgs),
     /// Print the canonical circuit JSON Schema v1.0.
     Schema,
 }
@@ -77,6 +80,36 @@ struct CompileArgs {
 
     /// Permit an existing --output file to be atomically replaced.
     #[arg(long, requires = "output")]
+    force: bool,
+}
+
+#[derive(Debug, Args)]
+struct ImportArgs {
+    /// Foreign project directory to import.
+    project: PathBuf,
+
+    /// Import profile id. Auto-detected when omitted.
+    #[arg(long, value_name = "ID")]
+    profile: Option<String>,
+
+    /// Directory to write one `<ChipName>.v` per compiled unit.
+    #[arg(long, value_name = "DIR", required_unless_present = "stdout")]
+    out: Option<PathBuf>,
+
+    /// Restrict to a single unit by name.
+    #[arg(long, value_name = "NAME")]
+    chip: Option<String>,
+
+    /// Write a single unit's Verilog to stdout. Requires --chip.
+    #[arg(long, requires = "chip", conflicts_with = "out")]
+    stdout: bool,
+
+    /// Also write the intermediate canonical JSON per unit to this directory.
+    #[arg(long, value_name = "DIR")]
+    emit_canonical: Option<PathBuf>,
+
+    /// Permit existing output files to be atomically replaced.
+    #[arg(long)]
     force: bool,
 }
 
@@ -112,6 +145,7 @@ fn run(cli: Cli) -> Result<(), u8> {
     match cli.command {
         Command::Validate(arguments) => validate_command(arguments, cli.diagnostics),
         Command::Compile(arguments) => compile_command(arguments, cli.diagnostics),
+        Command::Import(arguments) => import_command(arguments, cli.diagnostics),
         Command::Schema => print_schema().map_err(|error| {
             render_failure(cli.diagnostics, &io_failure("schema", error));
             EXIT_IO
@@ -188,6 +222,189 @@ fn compile_command(arguments: CompileArgs, format: DiagnosticFormat) -> Result<(
     }
     render_report(format, "compile", true, &result.diagnostics);
     Ok(())
+}
+
+fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(), u8> {
+    let profile = select_profile(&arguments).map_err(|failure| {
+        let code = failure.exit_code;
+        render_failure(format, &failure);
+        code
+    })?;
+
+    let conversion = profile.convert(&arguments.project).map_err(|error| {
+        let failure = profile_failure(error);
+        let code = failure.exit_code;
+        render_failure(format, &failure);
+        code
+    })?;
+
+    // Select which units to emit.
+    let selected: Vec<&NamedCircuit> = match &arguments.chip {
+        Some(name) => match conversion
+            .circuits
+            .iter()
+            .find(|circuit| &circuit.name == name)
+        {
+            Some(circuit) => vec![circuit],
+            None => {
+                let failure = CliFailure {
+                    stage: "import",
+                    category: "unknown_unit",
+                    message: format!("no unit named '{name}' in project"),
+                    diagnostics: Value::Array(Vec::new()),
+                    exit_code: EXIT_INVALID,
+                };
+                render_failure(format, &failure);
+                return Err(EXIT_INVALID);
+            }
+        },
+        None => conversion.circuits.iter().collect(),
+    };
+
+    // Compile each selected unit.
+    let mut outputs: Vec<(&str, String)> = Vec::with_capacity(selected.len());
+    for named in &selected {
+        let result = Kernel::default().compile_verilog(&named.document, &CompileOptions::default());
+        if !result.has_output() {
+            let internal = result
+                .diagnostics
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagnosticCode::InternalInvariant);
+            eprintln!("import: unit '{}' failed to compile", named.name);
+            render_report(format, "import", false, &result.diagnostics);
+            return Err(if internal {
+                EXIT_INTERNAL
+            } else {
+                EXIT_INVALID
+            });
+        }
+        let verilog = result.verilog.expect("has_output checked above");
+        outputs.push((named.name.as_str(), verilog));
+    }
+
+    // Optionally emit the intermediate canonical JSON.
+    if let Some(dir) = &arguments.emit_canonical {
+        fs::create_dir_all(dir).map_err(|error| {
+            render_failure(format, &io_failure("emit-canonical", error));
+            EXIT_IO
+        })?;
+        for named in &selected {
+            let json = serde_json::to_string_pretty(&named.document).map_err(|_| {
+                let failure = CliFailure {
+                    stage: "emit-canonical",
+                    category: "internal",
+                    message: "canonical document could not be serialized".into(),
+                    diagnostics: Value::Array(Vec::new()),
+                    exit_code: EXIT_INTERNAL,
+                };
+                render_failure(format, &failure);
+                EXIT_INTERNAL
+            })?;
+            let path = dir.join(format!("{}.json", named.name));
+            write_atomic(&path, json.as_bytes(), arguments.force).map_err(|error| {
+                render_failure(format, &io_failure("emit-canonical", error));
+                EXIT_IO
+            })?;
+        }
+    }
+
+    // Emit Verilog to stdout or one file per unit.
+    if arguments.stdout {
+        let (_, verilog) = &outputs[0];
+        let mut handle = io::stdout().lock();
+        handle.write_all(verilog.as_bytes()).map_err(|error| {
+            render_failure(format, &io_failure("stdout", error));
+            EXIT_IO
+        })?;
+        handle.flush().map_err(|error| {
+            render_failure(format, &io_failure("stdout", error));
+            EXIT_IO
+        })?;
+    } else {
+        let out = arguments
+            .out
+            .as_ref()
+            .expect("clap requires --out unless --stdout");
+        fs::create_dir_all(out).map_err(|error| {
+            render_failure(format, &io_failure("output", error));
+            EXIT_IO
+        })?;
+        for (name, verilog) in &outputs {
+            let path = out.join(format!("{name}.v"));
+            write_atomic(&path, verilog.as_bytes(), arguments.force).map_err(|error| {
+                render_failure(format, &io_failure("output", error));
+                EXIT_IO
+            })?;
+        }
+    }
+
+    render_import_success(format, &conversion.project_name, &outputs);
+    Ok(())
+}
+
+fn select_profile(arguments: &ImportArgs) -> Result<Box<dyn Profile>, CliFailure> {
+    match &arguments.profile {
+        Some(id) => profile_by_id(id).ok_or_else(|| CliFailure {
+            stage: "import",
+            category: "unknown_profile",
+            message: format!("no import profile with id '{id}'"),
+            diagnostics: Value::Array(Vec::new()),
+            exit_code: EXIT_INVALID,
+        }),
+        None => detect_profile(&arguments.project).ok_or_else(|| CliFailure {
+            stage: "import",
+            category: "profile_detection",
+            message: format!(
+                "could not detect an import profile for '{}'; pass --profile",
+                arguments.project.display()
+            ),
+            diagnostics: Value::Array(Vec::new()),
+            exit_code: EXIT_INVALID,
+        }),
+    }
+}
+
+fn profile_failure(error: ProfileError) -> CliFailure {
+    let (category, exit_code) = match &error {
+        ProfileError::Io { .. } => ("io", EXIT_IO),
+        ProfileError::Parse { .. } => ("malformed_input", EXIT_INVALID),
+        ProfileError::Unsupported { .. } => ("unsupported", EXIT_INVALID),
+        ProfileError::Structure { .. } => ("structure", EXIT_INVALID),
+    };
+    CliFailure {
+        stage: "import",
+        category,
+        message: error.to_string(),
+        diagnostics: Value::Array(Vec::new()),
+        exit_code,
+    }
+}
+
+fn render_import_success(format: DiagnosticFormat, project: &str, outputs: &[(&str, String)]) {
+    match format {
+        DiagnosticFormat::Human => {
+            for (name, _) in outputs {
+                eprintln!("compiled unit '{name}'");
+            }
+            eprintln!("import: {} unit(s) from project '{project}'", outputs.len());
+        }
+        DiagnosticFormat::Json => {
+            let units: Vec<&str> = outputs.iter().map(|(name, _)| *name).collect();
+            let envelope = json!({
+                "success": true,
+                "command": "import",
+                "project": project,
+                "schemaVersion": SUPPORTED_SCHEMA_VERSION,
+                "compilerVersion": COMPILER_VERSION,
+                "units": units,
+            });
+            match serde_json::to_string(&envelope) {
+                Ok(encoded) => eprintln!("{encoded}"),
+                Err(_) => eprintln!("{{\"success\":false}}"),
+            }
+        }
+    }
 }
 
 fn print_schema() -> io::Result<()> {

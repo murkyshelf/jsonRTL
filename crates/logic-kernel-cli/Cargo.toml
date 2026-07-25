@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 clap.workspace = true
 logic-kernel = { path = "../logic-kernel" }
+logic-kernel-profiles = { path = "../logic-kernel-profiles" }
 serde.workspace = true
 serde_json.workspace = true
 
