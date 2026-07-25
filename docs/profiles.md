@@ -21,9 +21,16 @@ pub trait Profile {
 }
 ```
 
+Profiles also describe themselves — `source`, `input_hint`, `supports`, and a
+`status` of `stable` or `experimental` — which is what `jsonrtl profiles`
+prints.
+
 - `registry()` lists every profile in the build.
 - `profile_by_id(id)` selects one explicitly.
 - `detect_profile(path)` auto-selects when the caller does not name one.
+- `units(path)` lists a project's units without converting any.
+- `convert_unit(path, unit)` converts one unit and its dependencies, so a
+  broken chip elsewhere in the project cannot fail it.
 
 A successful `convert` returns a `ProjectConversion { project_name, circuits }`
 where each `NamedCircuit { name, document }` is one canonical
@@ -38,6 +45,8 @@ diagnostics), always naming the offending source unit:
 | `Parse` | a foreign file was present but invalid for its format |
 | `Unsupported` | a construct outside the profile's supported subset |
 | `Structure` | dangling reference, cycle, excess depth, missing/duplicate driver |
+| `Limit` | conversion would exceed a profile resource bound |
+| `UnknownUnit` | the caller asked for a unit the project does not contain |
 
 ## Status
 

@@ -229,3 +229,102 @@ impl Drop for TempDirectory {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
+
+#[test]
+fn skip_unsupported_emits_what_compiles_and_names_the_rest() {
+    // The `unsupported` fixture mixes convertible chips (inverter, wide) with
+    // ones outside the subset (clocky).
+    let directory = TempDirectory::new();
+    let output = run([
+        "import",
+        dls_project("unsupported").to_str().unwrap(),
+        "--out",
+        directory.path().to_str().unwrap(),
+        "--skip-unsupported",
+    ]);
+
+    // Still fails, so a script cannot mistake a partial import for a full one.
+    assert_eq!(output.status.code(), Some(2), "stderr: {}", stderr(&output));
+
+    assert!(directory.path().join("inverter.v").is_file());
+    assert!(directory.path().join("wide.v").is_file());
+    assert!(!directory.path().join("clocky.v").is_file());
+
+    let text = stderr(&output);
+    assert!(text.contains("compiled unit 'inverter'"), "{text}");
+    assert!(text.contains("skipped unit 'clocky'"), "{text}");
+    assert!(text.contains("CLOCK"), "reason must be given: {text}");
+    assert!(text.contains("unit(s) skipped"), "{text}");
+}
+
+#[test]
+fn without_skip_unsupported_a_bad_chip_still_fails_the_whole_run() {
+    let directory = TempDirectory::new();
+    let output = run([
+        "import",
+        dls_project("unsupported").to_str().unwrap(),
+        "--out",
+        directory.path().to_str().unwrap(),
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        fs::read_dir(directory.path()).unwrap().next().is_none(),
+        "a failed run must leave no files behind"
+    );
+}
+
+#[test]
+fn skip_unsupported_json_lists_every_skipped_unit_with_a_reason() {
+    let directory = TempDirectory::new();
+    let output = run([
+        "--diagnostics",
+        "json",
+        "import",
+        dls_project("unsupported").to_str().unwrap(),
+        "--out",
+        directory.path().to_str().unwrap(),
+        "--skip-unsupported",
+    ]);
+    let envelope: serde_json::Value = serde_json::from_str(stderr(&output).trim()).unwrap();
+    assert_eq!(envelope["success"], false);
+    assert_eq!(envelope["command"], "import");
+    let skipped = envelope["skipped"].as_array().unwrap();
+    assert!(!skipped.is_empty());
+    assert!(skipped.iter().all(|entry| {
+        !entry["unit"].as_str().unwrap().is_empty() && !entry["reason"].as_str().unwrap().is_empty()
+    }));
+}
+
+#[test]
+fn profiles_lists_every_registered_profile() {
+    let output = run(["profiles"]);
+    assert_eq!(output.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(text.contains("dls"), "{text}");
+    assert!(text.contains("logisim"), "{text}");
+    assert!(text.contains("experimental"), "{text}");
+    assert!(text.contains("Digital-Logic-Sim"), "{text}");
+}
+
+#[test]
+fn profiles_json_is_machine_readable() {
+    let output = run(["--diagnostics", "json", "profiles"]);
+    assert_eq!(output.status.code(), Some(0));
+    let envelope: serde_json::Value =
+        serde_json::from_str(String::from_utf8_lossy(&output.stdout).trim()).unwrap();
+    assert_eq!(envelope["command"], "profiles");
+    let profiles = envelope["profiles"].as_array().unwrap();
+    let ids: Vec<&str> = profiles
+        .iter()
+        .map(|profile| profile["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec!["dls", "logisim"]);
+    for profile in profiles {
+        for field in ["status", "source", "input", "supports"] {
+            assert!(
+                !profile[field].as_str().unwrap().is_empty(),
+                "empty {field}"
+            );
+        }
+    }
+}

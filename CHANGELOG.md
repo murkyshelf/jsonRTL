@@ -51,6 +51,13 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `BUS-N` aliases, and `BUS-TERMINUS-N` sinks pure re-labelling that emits no
   logic. Bit ordering is most significant first, verified against the carry
   chain of a real 16-bit adder.
+- **`import --skip-unsupported`**: emit every unit that compiles instead of
+  failing on the first that does not. Each skipped unit is reported with its
+  reason and the run still exits `2`, so a partial import is never mistaken for
+  a complete one.
+- **`jsonrtl profiles`**: list the import profiles in the build with their
+  source tool, expected input layout, supported subset, and maturity. Also
+  available as `--diagnostics json`.
 
 ### Fixed
 

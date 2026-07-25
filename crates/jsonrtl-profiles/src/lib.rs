@@ -27,6 +27,13 @@ pub struct ProjectConversion {
     pub circuits: Vec<NamedCircuit>,
 }
 
+/// A project's identity and the units it contains, without converting any.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectUnits {
+    pub project_name: String,
+    pub unit_names: Vec<String>,
+}
+
 /// A failure while importing a foreign project.
 ///
 /// These are *conversion* diagnostics, distinct from kernel validation
@@ -88,13 +95,47 @@ pub fn is_safe_unit_name(name: &str) -> bool {
     }
 }
 
+/// How far a profile can be trusted on real projects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProfileStatus {
+    /// Verified against real exports from the source tool.
+    Stable,
+    /// Implemented from the format, but not yet calibrated against real files.
+    Experimental,
+}
+
+impl ProfileStatus {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Experimental => "experimental",
+        }
+    }
+}
+
 /// A converter from one foreign project format to canonical circuit documents.
 pub trait Profile {
     /// Stable identifier used on the CLI (e.g. `"dls"`).
     fn id(&self) -> &'static str;
 
+    /// The tool whose projects this profile reads.
+    fn source(&self) -> &'static str;
+
+    /// What a project looks like on disk, for the CLI listing.
+    fn input_hint(&self) -> &'static str;
+
+    /// One line describing the supported subset.
+    fn supports(&self) -> &'static str;
+
+    /// How far this profile can be trusted; see [`ProfileStatus`].
+    fn status(&self) -> ProfileStatus;
+
     /// Returns true if `path` looks like a project this profile can convert.
     fn detect(&self, path: &Path) -> bool;
+
+    /// Lists a project's units without converting any of them.
+    fn units(&self, path: &Path) -> Result<ProjectUnits, ProfileError>;
 
     /// Converts a project directory into canonical documents.
     fn convert(&self, path: &Path) -> Result<ProjectConversion, ProfileError>;

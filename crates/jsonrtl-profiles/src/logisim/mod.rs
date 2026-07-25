@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use crate::{NamedCircuit, ProfileError, ProjectConversion};
+use crate::{NamedCircuit, ProfileError, ProfileStatus, ProjectConversion, ProjectUnits};
 
 pub mod elaborate;
 pub mod geometry;
@@ -30,11 +30,36 @@ impl crate::Profile for LogisimProfile {
         "logisim"
     }
 
+    fn source(&self) -> &'static str {
+        "Logisim and Logisim Evolution"
+    }
+
+    fn input_hint(&self) -> &'static str {
+        "a single .circ file"
+    }
+
+    fn supports(&self) -> &'static str {
+        "single-bit combinational logic; Pin and the basic gates"
+    }
+
+    fn status(&self) -> ProfileStatus {
+        // Port geometry has not been calibrated against real exports.
+        ProfileStatus::Experimental
+    }
+
     fn detect(&self, path: &Path) -> bool {
         path.is_file()
             && path
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("circ"))
+    }
+
+    fn units(&self, path: &Path) -> Result<ProjectUnits, ProfileError> {
+        let project = model::load_project(path)?;
+        Ok(ProjectUnits {
+            project_name: project_name(path),
+            unit_names: project.circuit_names,
+        })
     }
 
     fn convert(&self, path: &Path) -> Result<ProjectConversion, ProfileError> {

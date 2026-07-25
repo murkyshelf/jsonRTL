@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use crate::{NamedCircuit, ProfileError, ProjectConversion};
+use crate::{NamedCircuit, ProfileError, ProfileStatus, ProjectConversion, ProjectUnits};
 
 pub mod builtin;
 pub mod elaborate;
@@ -22,10 +22,34 @@ impl crate::Profile for DlsProfile {
         "dls"
     }
 
+    fn source(&self) -> &'static str {
+        "Sebastian Lague's Digital-Logic-Sim"
+    }
+
+    fn input_hint(&self) -> &'static str {
+        "a project directory (ProjectDescription.json + Chips/)"
+    }
+
+    fn supports(&self) -> &'static str {
+        "combinational logic of any width; NAND, bus split/merge, BUS-N"
+    }
+
+    fn status(&self) -> ProfileStatus {
+        ProfileStatus::Stable
+    }
+
     fn detect(&self, path: &Path) -> bool {
         path.is_dir()
             && path.join("ProjectDescription.json").is_file()
             && path.join("Chips").is_dir()
+    }
+
+    fn units(&self, path: &Path) -> Result<ProjectUnits, ProfileError> {
+        let project = model::load_project(path)?;
+        Ok(ProjectUnits {
+            project_name: project.name,
+            unit_names: project.chip_names,
+        })
     }
 
     fn convert(&self, path: &Path) -> Result<ProjectConversion, ProfileError> {

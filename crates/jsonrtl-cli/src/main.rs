@@ -8,11 +8,11 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use jsonrtl::{
-    CIRCUIT_V1_SCHEMA, CircuitDocument, CompileOptions, Diagnostic, DiagnosticCode, Kernel,
-    ParseError, SUPPORTED_SCHEMA_VERSION, ValidationReport,
+    CIRCUIT_V1_SCHEMA, CircuitDocument, CompileOptions, Diagnostic, DiagnosticCode,
+    DiagnosticSeverity, Kernel, ParseError, SUPPORTED_SCHEMA_VERSION, ValidationReport,
 };
 use jsonrtl_profiles::{
-    NamedCircuit, Profile, ProfileError, detect_profile, is_safe_unit_name, profile_by_id,
+    NamedCircuit, Profile, ProfileError, detect_profile, is_safe_unit_name, profile_by_id, registry,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -57,6 +57,8 @@ enum Command {
     Compile(CompileArgs),
     /// Import a foreign project (e.g. DLS) and compile each unit to Verilog.
     Import(ImportArgs),
+    /// List the import profiles available in this build.
+    Profiles,
     /// Print the canonical circuit JSON Schema v1.0.
     Schema,
 }
@@ -113,6 +115,12 @@ struct ImportArgs {
     /// Permit existing output files to be atomically replaced.
     #[arg(long)]
     force: bool,
+
+    /// Emit every unit that compiles instead of failing on the first that does
+    /// not. Each skipped unit is reported with its reason and the run still
+    /// exits non-zero, so nothing is ever skipped silently.
+    #[arg(long, conflicts_with = "chip")]
+    skip_unsupported: bool,
 }
 
 #[derive(Debug)]
@@ -148,6 +156,10 @@ fn run(cli: Cli) -> Result<(), u8> {
         Command::Validate(arguments) => validate_command(arguments, cli.diagnostics),
         Command::Compile(arguments) => compile_command(arguments, cli.diagnostics),
         Command::Import(arguments) => import_command(arguments, cli.diagnostics),
+        Command::Profiles => {
+            print_profiles(cli.diagnostics);
+            Ok(())
+        }
         Command::Schema => print_schema().map_err(|error| {
             render_failure(cli.diagnostics, &io_failure("schema", error));
             EXIT_IO
@@ -233,26 +245,55 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         code
     })?;
 
-    // Select before converting. Converting the whole project first would let an
-    // unsupported chip anywhere in it fail a `--chip` run for an unrelated unit.
-    let conversion = match &arguments.chip {
-        Some(name) => profile.convert_unit(&arguments.project, name),
-        None => profile.convert(&arguments.project),
-    }
-    .map_err(|error| {
-        let failure = profile_failure(error);
-        let code = failure.exit_code;
-        render_failure(format, &failure);
-        code
-    })?;
-
-    let selected: Vec<&NamedCircuit> = conversion.circuits.iter().collect();
+    // In skip mode each unit is converted and compiled independently so one
+    // failure cannot hide the units that do work. Every skip is reported.
+    let mut skipped: Vec<SkippedUnit> = Vec::new();
+    let (project_name, selected) = if arguments.skip_unsupported {
+        let units = profile.units(&arguments.project).map_err(|error| {
+            let failure = profile_failure(error);
+            let code = failure.exit_code;
+            render_failure(format, &failure);
+            code
+        })?;
+        let mut kept = Vec::new();
+        for unit in &units.unit_names {
+            match profile.convert_unit(&arguments.project, unit) {
+                Ok(conversion) => kept.extend(conversion.circuits),
+                Err(error) => skipped.push(SkippedUnit {
+                    unit: unit.clone(),
+                    reason: error.to_string(),
+                }),
+            }
+        }
+        (units.project_name, kept)
+    } else {
+        // Select before converting. Converting the whole project first would
+        // let an unsupported chip fail a `--chip` run for an unrelated unit.
+        let conversion = match &arguments.chip {
+            Some(name) => profile.convert_unit(&arguments.project, name),
+            None => profile.convert(&arguments.project),
+        }
+        .map_err(|error| {
+            let failure = profile_failure(error);
+            let code = failure.exit_code;
+            render_failure(format, &failure);
+            code
+        })?;
+        (conversion.project_name, conversion.circuits)
+    };
 
     // Compile each selected unit.
     let mut outputs: Vec<(&str, String)> = Vec::with_capacity(selected.len());
     for named in &selected {
         let result = Kernel::default().compile_verilog(&named.document, &CompileOptions::default());
         if !result.has_output() {
+            if arguments.skip_unsupported {
+                skipped.push(SkippedUnit {
+                    unit: named.name.clone(),
+                    reason: first_error_message(&result.diagnostics),
+                });
+                continue;
+            }
             let internal = result
                 .diagnostics
                 .diagnostics()
@@ -268,6 +309,25 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         }
         let verilog = result.verilog.expect("has_output checked above");
         outputs.push((named.name.as_str(), verilog));
+    }
+    let selected: Vec<&NamedCircuit> = selected
+        .iter()
+        .filter(|named| outputs.iter().any(|(name, _)| *name == named.name))
+        .collect();
+
+    if arguments.skip_unsupported && outputs.is_empty() {
+        let failure = CliFailure {
+            stage: "import",
+            category: "no_supported_units",
+            message: format!(
+                "no unit in project '{project_name}' could be compiled; {} skipped",
+                skipped.len()
+            ),
+            diagnostics: skipped_json(&skipped),
+            exit_code: EXIT_INVALID,
+        };
+        render_failure(format, &failure);
+        return Err(EXIT_INVALID);
     }
 
     // Unit names become file names. A profile is responsible for its own input,
@@ -380,8 +440,43 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
         }
     }
 
-    render_import_success(format, &conversion.project_name, &outputs);
-    Ok(())
+    render_import_success(format, &project_name, &outputs, &skipped);
+    // Skipping is opt-in but never silent: the run reports every skipped unit
+    // and still fails, so a script cannot mistake a partial import for a full
+    // one.
+    if skipped.is_empty() {
+        Ok(())
+    } else {
+        Err(EXIT_INVALID)
+    }
+}
+
+/// A unit left out of a `--skip-unsupported` run, and why.
+#[derive(Debug)]
+struct SkippedUnit {
+    unit: String,
+    reason: String,
+}
+
+fn skipped_json(skipped: &[SkippedUnit]) -> Value {
+    Value::Array(
+        skipped
+            .iter()
+            .map(|entry| json!({ "unit": entry.unit, "reason": entry.reason }))
+            .collect(),
+    )
+}
+
+/// The first error message in a report, for a one-line skip reason.
+fn first_error_message(report: &jsonrtl::ValidationReport) -> String {
+    report
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+        .map_or_else(
+            || "unit failed to compile".to_string(),
+            |diagnostic| format!("{}: {}", diagnostic.code.as_str(), diagnostic.message),
+        )
 }
 
 fn select_profile(arguments: &ImportArgs) -> Result<Box<dyn Profile>, CliFailure> {
@@ -424,27 +519,83 @@ fn profile_failure(error: ProfileError) -> CliFailure {
     }
 }
 
-fn render_import_success(format: DiagnosticFormat, project: &str, outputs: &[(&str, String)]) {
+fn render_import_success(
+    format: DiagnosticFormat,
+    project: &str,
+    outputs: &[(&str, String)],
+    skipped: &[SkippedUnit],
+) {
     match format {
         DiagnosticFormat::Human => {
             for (name, _) in outputs {
                 eprintln!("compiled unit '{name}'");
             }
+            for entry in skipped {
+                eprintln!("skipped unit '{}': {}", entry.unit, entry.reason);
+            }
             eprintln!("import: {} unit(s) from project '{project}'", outputs.len());
+            if !skipped.is_empty() {
+                eprintln!("import: {} unit(s) skipped", skipped.len());
+            }
         }
         DiagnosticFormat::Json => {
             let units: Vec<&str> = outputs.iter().map(|(name, _)| *name).collect();
             let envelope = json!({
-                "success": true,
+                "success": skipped.is_empty(),
                 "command": "import",
                 "project": project,
                 "schemaVersion": SUPPORTED_SCHEMA_VERSION,
                 "compilerVersion": COMPILER_VERSION,
                 "units": units,
+                "skipped": skipped_json(skipped),
             });
             match serde_json::to_string(&envelope) {
                 Ok(encoded) => eprintln!("{encoded}"),
                 Err(_) => eprintln!("{{\"success\":false}}"),
+            }
+        }
+    }
+}
+
+/// Lists the import profiles compiled into this build.
+fn print_profiles(format: DiagnosticFormat) {
+    let profiles = registry();
+    match format {
+        DiagnosticFormat::Human => {
+            println!("Import profiles available in this build:");
+            println!();
+            for profile in &profiles {
+                println!("  {} ({})", profile.id(), profile.status().as_str());
+                println!("      source:   {}", profile.source());
+                println!("      input:    {}", profile.input_hint());
+                println!("      supports: {}", profile.supports());
+                println!();
+            }
+            println!("Use with: jsonrtl import <PROJECT> --profile <ID>");
+            println!("The profile is auto-detected when --profile is omitted.");
+        }
+        DiagnosticFormat::Json => {
+            let entries: Vec<Value> = profiles
+                .iter()
+                .map(|profile| {
+                    json!({
+                        "id": profile.id(),
+                        "status": profile.status().as_str(),
+                        "source": profile.source(),
+                        "input": profile.input_hint(),
+                        "supports": profile.supports(),
+                    })
+                })
+                .collect();
+            let envelope = json!({
+                "success": true,
+                "command": "profiles",
+                "compilerVersion": COMPILER_VERSION,
+                "profiles": entries,
+            });
+            match serde_json::to_string(&envelope) {
+                Ok(encoded) => println!("{encoded}"),
+                Err(_) => println!("{{\"success\":false}}"),
             }
         }
     }
