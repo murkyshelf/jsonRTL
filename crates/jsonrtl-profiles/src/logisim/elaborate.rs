@@ -12,9 +12,19 @@ use crate::{
     ProfileError,
     logisim::{
         geometry::{PortRole, gate_ports, pin_port, unary_ports},
-        model::{Comp, LogisimProject, Point},
+        model::{Comp, LogisimProject, MAX_COMPONENTS, MAX_WIRES, Point},
     },
 };
+
+const MAX_PORTS: usize = 100_000;
+const MAX_CONNECTIVITY_CHECKS: usize = 10_000_000;
+
+fn limit(circuit: &str, detail: String) -> ProfileError {
+    ProfileError::Limit {
+        chip: circuit.to_string(),
+        detail,
+    }
+}
 
 /// A gate the kernel can express, before arity decomposition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,16 +102,16 @@ fn classify(comp: &Comp, circuit: &str) -> Result<Kind, ProfileError> {
 
 /// Rejects any component carrying a bit width other than one.
 fn check_single_bit(comp: &Comp, circuit: &str) -> Result<(), ProfileError> {
-    if let Some(width) = comp.attr_int("width")
-        && width != 1
-    {
-        return Err(ProfileError::Unsupported {
-            chip: circuit.to_string(),
-            detail: format!(
-                "component '{}' at {} is {width} bits wide; only single-bit signals are supported",
-                comp.name, comp.loc
-            ),
-        });
+    if let Some(width) = comp.attr_int("width") {
+        if width != 1 {
+            return Err(ProfileError::Unsupported {
+                chip: circuit.to_string(),
+                detail: format!(
+                    "component '{}' at {} is {width} bits wide; only single-bit signals are supported",
+                    comp.name, comp.loc
+                ),
+            });
+        }
     }
     Ok(())
 }
@@ -132,9 +142,23 @@ pub fn elaborate(
             detail: format!("no circuit named '{circuit_name}' in project"),
         })?;
 
+    // Public callers can construct models without going through the XML loader.
+    if circuit.comps.len() > MAX_COMPONENTS || circuit.wires.len() > MAX_WIRES {
+        return Err(limit(
+            circuit_name,
+            format!("circuit exceeds {MAX_COMPONENTS} components or {MAX_WIRES} wires"),
+        ));
+    }
+    for wire in &circuit.wires {
+        wire.from.validate(circuit_name)?;
+        wire.to.validate(circuit_name)?;
+    }
+
     // Classify first so an unsupported component is reported before any work.
     let mut kinds = Vec::with_capacity(circuit.comps.len());
+    let mut port_count = 0;
     for comp in &circuit.comps {
+        comp.validate_geometry(circuit_name)?;
         check_single_bit(comp, circuit_name)?;
         let kind = classify(comp, circuit_name)?;
         if matches!(kind, Kind::Subcircuit) {
@@ -149,12 +173,38 @@ pub fn elaborate(
                 ),
             });
         }
+        port_count += match &kind {
+            Kind::Gate(GateKind::Not | GateKind::Buffer) => 2,
+            Kind::Gate(_) => comp.attr_int("inputs").unwrap_or(2) as usize + 1,
+            Kind::Pin(_) => 1,
+            Kind::Subcircuit => unreachable!("rejected above"),
+        };
+        if port_count > MAX_PORTS {
+            return Err(limit(
+                circuit_name,
+                format!("circuit exceeds {MAX_PORTS} component ports"),
+            ));
+        }
         kinds.push(kind);
+    }
+    let point_bound = port_count + 2 * circuit.wires.len();
+    if circuit
+        .wires
+        .len()
+        .checked_mul(point_bound)
+        .is_none_or(|work| work > MAX_CONNECTIVITY_CHECKS)
+    {
+        return Err(limit(
+            circuit_name,
+            format!("connectivity exceeds {MAX_CONNECTIVITY_CHECKS} wire/point checks"),
+        ));
     }
 
     // Collect every port position alongside its owning component.
-    let mut ports: Vec<(usize, PortRole, Point)> = Vec::new();
+    let mut ports: Vec<(usize, PortRole, Point)> = Vec::with_capacity(port_count);
+    let mut port_starts = Vec::with_capacity(circuit.comps.len() + 1);
     for (index, (comp, kind)) in circuit.comps.iter().zip(kinds.iter()).enumerate() {
+        port_starts.push(ports.len());
         match kind {
             Kind::Gate(GateKind::Not | GateKind::Buffer) => {
                 for port in unary_ports(comp) {
@@ -162,7 +212,7 @@ pub fn elaborate(
                 }
             }
             Kind::Gate(_) => {
-                let inputs = comp.attr_int("inputs").unwrap_or(2).max(1) as usize;
+                let inputs = comp.attr_int("inputs").unwrap_or(2) as usize;
                 for port in gate_ports(comp, inputs) {
                     ports.push((index, port.role, port.point));
                 }
@@ -174,6 +224,7 @@ pub fn elaborate(
             Kind::Subcircuit => unreachable!("rejected above"),
         }
     }
+    port_starts.push(ports.len());
 
     // Union-find over every distinct point that matters.
     let mut node_of: BTreeMap<Point, usize> = BTreeMap::new();
@@ -213,13 +264,10 @@ pub fn elaborate(
     let mut outputs = Vec::new();
     let mut gates = Vec::new();
     for (index, (comp, kind)) in circuit.comps.iter().zip(kinds.iter()).enumerate() {
+        let component_ports = &ports[port_starts[index]..port_starts[index + 1]];
         match kind {
             Kind::Pin(is_output) => {
-                let point = ports
-                    .iter()
-                    .find(|(owner, _, _)| *owner == index)
-                    .map(|(_, _, point)| *point)
-                    .expect("pins always contribute a port");
+                let point = component_ports[0].2;
                 let pin = BoundaryPin {
                     name: comp
                         .attr("label")
@@ -235,9 +283,8 @@ pub fn elaborate(
                 }
             }
             Kind::Gate(gate) => {
-                let mut owned: Vec<(PortRole, Point)> = ports
+                let mut owned: Vec<(PortRole, Point)> = component_ports
                     .iter()
-                    .filter(|(owner, _, _)| *owner == index)
                     .map(|(_, role, point)| (*role, *point))
                     .collect();
                 owned.sort_by_key(|(role, _)| match role {

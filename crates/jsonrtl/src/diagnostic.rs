@@ -26,6 +26,7 @@ pub struct LimitDiagnostic {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DiagnosticCode {
+    SchemaUnsupportedVersion,
     IdDuplicateComponent,
     IdDuplicateNet,
     IdDuplicatePort,
@@ -66,6 +67,7 @@ pub enum DiagnosticCode {
 
 /// Complete Phase 2 semantic diagnostic registry.
 pub const DIAGNOSTIC_CODES: &[DiagnosticCode] = &[
+    DiagnosticCode::SchemaUnsupportedVersion,
     DiagnosticCode::IdDuplicateComponent,
     DiagnosticCode::IdDuplicateNet,
     DiagnosticCode::IdDuplicatePort,
@@ -107,6 +109,7 @@ impl DiagnosticCode {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::SchemaUnsupportedVersion => "SCHEMA_UNSUPPORTED_VERSION",
             Self::IdDuplicateComponent => "ID_DUPLICATE_COMPONENT",
             Self::IdDuplicateNet => "ID_DUPLICATE_NET",
             Self::IdDuplicatePort => "ID_DUPLICATE_PORT",

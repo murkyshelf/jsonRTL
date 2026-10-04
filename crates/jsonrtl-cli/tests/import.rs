@@ -44,6 +44,150 @@ fn import_single_chip_to_stdout() {
     assert!(text.contains("module AND"), "stdout:\n{text}");
 }
 
+fn copy_test_project(directory: &TempDirectory) -> PathBuf {
+    let source = dls_project("test");
+    let project = directory.path().join("project");
+    fs::create_dir_all(project.join("Chips")).unwrap();
+    fs::copy(
+        source.join("ProjectDescription.json"),
+        project.join("ProjectDescription.json"),
+    )
+    .unwrap();
+    for entry in fs::read_dir(source.join("Chips")).unwrap() {
+        let entry = entry.unwrap();
+        fs::copy(entry.path(), project.join("Chips").join(entry.file_name())).unwrap();
+    }
+    project
+}
+
+#[test]
+fn import_single_chip_ignores_malformed_siblings() {
+    let directory = TempDirectory::new();
+    let project = copy_test_project(&directory);
+    fs::write(project.join("Chips/OR.json"), "{broken").unwrap();
+    let output = run([
+        "import",
+        project.to_str().unwrap(),
+        "--chip",
+        "AND",
+        "--stdout",
+    ]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    assert_eq!(output.stdout, fs::read(dls_golden("AND.v")).unwrap());
+}
+
+#[test]
+fn import_single_chip_ignores_missing_siblings() {
+    let directory = TempDirectory::new();
+    let project = copy_test_project(&directory);
+    fs::remove_file(project.join("Chips/OR.json")).unwrap();
+    let output = run([
+        "import",
+        project.to_str().unwrap(),
+        "--chip",
+        "AND",
+        "--stdout",
+    ]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    assert_eq!(output.stdout, fs::read(dls_golden("AND.v")).unwrap());
+}
+
+#[test]
+fn import_single_chip_still_reports_a_malformed_dependency() {
+    let directory = TempDirectory::new();
+    let project = copy_test_project(&directory);
+    fs::write(project.join("Chips/OR.json"), "{broken").unwrap();
+    let output = run([
+        "import",
+        project.to_str().unwrap(),
+        "--chip",
+        "XOR",
+        "--stdout",
+    ]);
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(stderr(&output).contains("OR.json"), "{}", stderr(&output));
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn import_single_chip_still_reports_a_missing_dependency() {
+    let directory = TempDirectory::new();
+    let project = copy_test_project(&directory);
+    fs::remove_file(project.join("Chips/OR.json")).unwrap();
+    let output = run([
+        "import",
+        project.to_str().unwrap(),
+        "--chip",
+        "XOR",
+        "--stdout",
+    ]);
+    assert_eq!(output.status.code(), Some(3), "{}", stderr(&output));
+    assert!(stderr(&output).contains("OR.json"), "{}", stderr(&output));
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn skip_unsupported_keeps_valid_chips_with_malformed_siblings() {
+    let directory = TempDirectory::new();
+    let project = copy_test_project(&directory);
+    let out = directory.path().join("out");
+    fs::write(project.join("Chips/OR.json"), "{broken").unwrap();
+    let output = run([
+        "--diagnostics",
+        "json",
+        "import",
+        project.to_str().unwrap(),
+        "--out",
+        out.to_str().unwrap(),
+        "--skip-unsupported",
+    ]);
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(out.join("AND.v").is_file(), "{}", stderr(&output));
+    assert!(out.join("NOT.v").is_file());
+    assert!(!out.join("OR.v").exists());
+    assert!(!out.join("XOR.v").exists());
+    let envelope: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+    let skipped = envelope["skipped"].as_array().unwrap();
+    for unit in ["OR", "XOR", "1-bit adder"] {
+        assert!(
+            skipped.iter().any(|entry| entry["unit"] == unit
+                && entry["reason"].as_str().unwrap().contains("OR.json")),
+            "{envelope}"
+        );
+    }
+}
+
+#[test]
+fn import_rejects_shorted_boundary_drivers_without_emitting_verilog() {
+    let directory = TempDirectory::new();
+    let project = directory.path().join("project");
+    fs::create_dir_all(project.join("Chips")).unwrap();
+    fs::write(
+        project.join("ProjectDescription.json"),
+        r#"{"ProjectName":"short","AllCustomChipNames":["short"]}"#,
+    )
+    .unwrap();
+    fs::write(project.join("Chips/short.json"), r#"{
+        "Name":"short",
+        "InputPins":[{"Name":"a","ID":1,"BitCount":1},{"Name":"b","ID":2,"BitCount":1}],
+        "OutputPins":[{"Name":"y","ID":3,"BitCount":1}],"SubChips":[],
+        "Wires":[
+            {"SourcePinAddress":{"PinID":0,"PinOwnerID":1},"TargetPinAddress":{"PinID":0,"PinOwnerID":3}},
+            {"SourcePinAddress":{"PinID":0,"PinOwnerID":2},"TargetPinAddress":{"PinID":0,"PinOwnerID":3}}
+        ]
+    }"#).unwrap();
+    let output = run([
+        "import",
+        project.to_str().unwrap(),
+        "--chip",
+        "short",
+        "--stdout",
+    ]);
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(stderr(&output).contains("drivers"), "{}", stderr(&output));
+    assert!(output.stdout.is_empty());
+}
+
 #[test]
 fn import_auto_detects_profile_and_emits_canonical() {
     let directory = TempDirectory::new();

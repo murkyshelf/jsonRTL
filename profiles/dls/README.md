@@ -1,10 +1,25 @@
-# DLS Import Profile
+# DLS Profile
 
 Converts a **Sebastian Lague Digital-Logic-Sim** project into canonical circuit
 documents and compiles each chip to Verilog. Full reference (pin-addressing
 model, flatten-to-NAND algorithm, rejection list) lives in
 [`../../docs/profiles.md`](../../docs/profiles.md); this folder holds the
 manifest and a runnable example.
+
+The CLI also exports Verilog to native DLS 2.1.6 project files, including
+registers, resets, latches, and clocks. This path uses Yosys and does not pass
+through the combinational canonical kernel:
+
+```sh
+jsonrtl export top.v --top top --profile dls --out build/top
+jsonrtl export examples/verilog/counter.v --top counter --out build/counter --clock clk
+```
+
+Copy the whole result into DLS's `Projects` save folder and open the chip named
+by the success message. See [export options](../../docs/cli.md#export-options)
+for installation, opening instructions, and supported HDL, and the
+[native verification harness](../../scripts/dls-verification/README.md) for
+comparisons against Icarus Verilog.
 
 ## Run the example
 
@@ -60,7 +75,7 @@ assign net2 = ~(net3 & net3);
 endmodule
 ```
 
-## Supported subset
+## Supported import subset
 
 Combinational logic of any width, with **NAND** as the only gate primitive.
 

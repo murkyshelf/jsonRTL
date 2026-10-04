@@ -57,13 +57,14 @@ diagnostics), always naming the offending source unit:
 | DLS serde model + project loader | landed |
 | DLS flatten-to-NAND elaboration + lowering | landed |
 | CLI `import` command | landed |
+| Verilog-to-DLS `export`, including NAND register/latch helpers and clock wrapper | landed |
 | `profiles/dls/` manifest, docs, example | landed |
 | Logisim/Evolution profile (`.circ`, gates + pins) | landed, experimental |
 | Logisim subcircuit instances | blocked on port-geometry calibration |
 | Multi-bit buses (Phase M) | landed for DLS (schema v1.1 slices); Logisim still single-bit |
 | CLI `--skip-unsupported`, `profiles` / `--list-profiles` | landed |
 | Hierarchical Verilog emission (Phase H) | staged |
-| Sequential / clock (Phase S) | staged |
+| Canonical sequential / clock schema (Phase S) | staged; Verilog-to-DLS export supports these directly |
 
 Canonical schema v1.1 adds sliced connections (`{ net, msb, lsb }`), which is
 what lets a bus splitter be expressed at all. See
@@ -107,12 +108,17 @@ and NAND **inputs** are sinks.
 
 ### Conversion (flatten to NAND)
 
-1. Load the project into a `name -> ChipDef` map.
+1. Read project metadata, then load the selected chip's dependency closure into
+   a `name -> ChipDef` map. Listing units does not read chip definitions. A
+   `--chip` import is unaffected by malformed or missing unrelated chips;
+   `--skip-unsupported` shares loaded definitions and file errors across units.
 2. For each chip, elaborate a flat NAND netlist. Union-find runs over **single
    bits** rather than whole pins: a pin of width *W* contributes *W* nodes, and
    a wire unions its endpoints bit by bit. Custom subchips are recursively
    inlined with fresh instance namespacing.
-3. Group the resulting union-find roots into canonical nets. Each boundary pin
+3. Reject roots with multiple physical driver bits, including shorted bits of
+   one input bus and shorts between inputs and NAND outputs. Then group the
+   resulting union-find roots into canonical nets. Each boundary pin
    becomes one net of its own width, so the module keeps a bus interface; every
    other root becomes a one-bit internal net.
 4. Lower to canonical: each NAND instance becomes a one-bit `NAND` component
@@ -161,7 +167,8 @@ skipped:
 - any built-in outside the set above: `CLOCK`, `PULSE`, `KEY`,
   `3-STATE BUFFER`, `7-SEGMENT` / displays, `ROM` / memory;
 - a wire joining pins of different widths;
-- combinational cycles or missing/multiple drivers (surfaced by the kernel).
+- multiple drivers sharing a signal bit (rejected before lowering), or
+  combinational cycles and missing drivers (surfaced by the kernel).
   Latch structures built from NAND feedback — DLS registers and RAM — are
   genuine cycles for a combinational kernel and are reported as such.
 
@@ -174,6 +181,7 @@ Project files are untrusted. The profile enforces these before doing any work:
 | A chip name must be a single ordinary path component | Names are joined onto both the `Chips/` input directory and the output directory. `..`, `a/b`, absolute paths, and Windows drive/separator forms are rejected so conversion can never read or write outside the directories it was given. |
 | Chip names must be unique | A name listed twice in `AllCustomChipNames` would otherwise collide on output. |
 | Boundary-pin ids and sub-chip instance ids must be distinct within a chip | A shared id makes a wire resolve to the wrong endpoint, silently mis-wiring the circuit. |
+| DLS source files are capped at 8 MiB each, the project lists at most 4,096 chips, and loaded chip sources total at most 64 MiB per import | Metadata and read bounds limit allocation before parsing; chip count is checked before chip files are opened. Shared dependencies are counted once. |
 | Flattening is capped at 50,000 NAND instances and 2,000,000 signal bits | Each level that instantiates its child twice doubles the instance count, so nesting depth alone is not a bound; wide pins multiply node count by their width, so an instance cap alone no longer bounds memory. Both caps sit far above the kernel's component limit, so no compilable circuit is affected. |
 
 The CLI independently re-checks unit names before writing and refuses the whole
@@ -218,6 +226,27 @@ Rejected with a diagnostic naming the component and its coordinate: every other
 library (plexers, arithmetic, memory, splitters, tunnels, clocks), multi-bit
 signals, and — for now — subcircuit instances, whose port layout depends on the
 instance appearance and cannot be reconstructed safely without a reference file.
+
+### Input limits
+
+Logisim imports read at most 8 MiB and parse at most 100,000 XML nodes. A project
+may contain at most 256 circuits, 20,000 components, and 20,000 wires in total;
+these counts are checked before building the typed model. Each circuit is capped
+at 100,000 component ports and a worst-case 10,000,000 wire/point connectivity
+checks, checked before allocating its port geometry.
+
+When a circuit is elaborated, component and wire coordinates must lie within
++/-1,000,000. Gate input counts must be 1 through 64, sizes 1 through 1,000,
+and facing must be `east`, `west`,
+`north`, or `south`. These bounds keep geometry arithmetic within range.
+Malformed or missing values on explicit `inputs`, `size`, `width`, and `facing`
+attributes produce `ProfileError::Parse`; omitted attributes retain their
+defaults. Geometry validation happens before allocation or arithmetic for the
+selected circuit, so an invalid sibling does not block conversion of a valid
+circuit. XML syntax and coordinate numeric parsing errors remain project-level
+parse errors. Resource excesses produce `ProfileError::Limit`: byte/XML/count
+caps apply to the entire project, and geometry limits apply during elaboration.
+Geometry remains experimental.
 
 ## Adding a profile
 

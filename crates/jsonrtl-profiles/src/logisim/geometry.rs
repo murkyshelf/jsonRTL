@@ -9,6 +9,10 @@
 //! testable assumption. Elaboration treats any wire endpoint that fails to land
 //! on a port as an error rather than dropping it, so a wrong rule here surfaces
 //! as a clear diagnostic instead of silently mis-wired Verilog.
+//!
+//! Elaboration validates the model's coordinate, size, facing, and fan-in bounds
+//! before calling these helpers. Coordinates are at most +/-1,000,000, sizes at
+//! most 1,000, and gates have at most 64 inputs, keeping all arithmetic in range.
 
 use crate::logisim::model::{Comp, Point};
 

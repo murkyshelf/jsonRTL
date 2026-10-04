@@ -11,6 +11,7 @@ use crate::{NamedCircuit, ProfileError, ProfileStatus, ProjectConversion, Projec
 
 pub mod builtin;
 pub mod elaborate;
+pub mod export;
 pub mod lower;
 pub mod model;
 
@@ -45,48 +46,59 @@ impl crate::Profile for DlsProfile {
     }
 
     fn units(&self, path: &Path) -> Result<ProjectUnits, ProfileError> {
-        let project = model::load_project(path)?;
-        Ok(ProjectUnits {
-            project_name: project.name,
-            unit_names: project.chip_names,
-        })
+        model::load_metadata(path)
     }
 
     fn convert(&self, path: &Path) -> Result<ProjectConversion, ProfileError> {
-        let project = model::load_project(path)?;
-        let mut circuits = Vec::with_capacity(project.chip_names.len());
-        for name in &project.chip_names {
-            let flat = elaborate::elaborate(&project, name)?;
-            let document = lower::lower(name, &flat);
-            circuits.push(NamedCircuit {
-                name: name.clone(),
-                document,
-            });
+        let mut loader = model::ProjectLoader::new(path)?;
+        let mut circuits = Vec::with_capacity(loader.project.chip_names.len());
+        for name in loader.project.chip_names.clone() {
+            circuits.push(convert_loaded_unit(&mut loader, &name)?);
         }
         Ok(ProjectConversion {
-            project_name: project.name,
+            project_name: loader.project.name,
             circuits,
         })
     }
 
     fn convert_unit(&self, path: &Path, unit: &str) -> Result<ProjectConversion, ProfileError> {
-        let project = model::load_project(path)?;
-        if !project.chip_names.iter().any(|name| name == unit) {
-            return Err(ProfileError::UnknownUnit {
-                unit: unit.to_string(),
-            });
-        }
-        // Elaboration walks only this chip's dependency closure, so an
-        // unsupported chip elsewhere in the project cannot fail this call.
-        let flat = elaborate::elaborate(&project, unit)?;
+        let mut loader = model::ProjectLoader::new(path)?;
+        let circuit = convert_loaded_unit(&mut loader, unit)?;
         Ok(ProjectConversion {
-            project_name: project.name,
-            circuits: vec![NamedCircuit {
-                name: unit.to_string(),
-                document: lower::lower(unit, &flat),
-            }],
+            project_name: loader.project.name,
+            circuits: vec![circuit],
         })
     }
+
+    fn convert_units(
+        &self,
+        path: &Path,
+        units: &[String],
+    ) -> Result<Vec<Result<ProjectConversion, ProfileError>>, ProfileError> {
+        let mut loader = model::ProjectLoader::new(path)?;
+        Ok(units
+            .iter()
+            .map(|unit| {
+                let circuit = convert_loaded_unit(&mut loader, unit)?;
+                Ok(ProjectConversion {
+                    project_name: loader.project.name.clone(),
+                    circuits: vec![circuit],
+                })
+            })
+            .collect())
+    }
+}
+
+fn convert_loaded_unit(
+    loader: &mut model::ProjectLoader,
+    unit: &str,
+) -> Result<NamedCircuit, ProfileError> {
+    loader.load_unit(unit)?;
+    let flat = elaborate::elaborate(&loader.project, unit)?;
+    Ok(NamedCircuit {
+        name: unit.to_string(),
+        document: lower::lower(unit, &flat),
+    })
 }
 
 #[cfg(test)]
@@ -100,6 +112,49 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/dls")
             .join(name)
+    }
+
+    #[test]
+    fn units_lists_metadata_without_reading_chip_files() {
+        let directory =
+            std::env::temp_dir().join(format!("jsonrtl-dls-units-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("ProjectDescription.json"),
+            r#"{"ProjectName":"metadata","AllCustomChipNames":["AND","OR"]}"#,
+        )
+        .unwrap();
+        let result = DlsProfile.units(&directory);
+        std::fs::remove_dir_all(&directory).unwrap();
+        let units = result.expect("listing must not require any chip file");
+        assert_eq!(units.project_name, "metadata");
+        assert_eq!(units.unit_names, ["AND", "OR"]);
+    }
+
+    #[test]
+    fn batch_conversion_isolates_a_missing_chip() {
+        let directory =
+            std::env::temp_dir().join(format!("jsonrtl-dls-batch-{}", std::process::id()));
+        std::fs::create_dir_all(directory.join("Chips")).unwrap();
+        std::fs::write(
+            directory.join("ProjectDescription.json"),
+            r#"{"ProjectName":"batch","AllCustomChipNames":["AND","OR"]}"#,
+        )
+        .unwrap();
+        std::fs::copy(
+            fixture("test").join("Chips/AND.json"),
+            directory.join("Chips/AND.json"),
+        )
+        .unwrap();
+        let result = DlsProfile.convert_units(&directory, &["AND".into(), "OR".into()]);
+        std::fs::remove_dir_all(&directory).unwrap();
+        let results = result.unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(
+            results[0].as_ref().expect("AND converts").circuits[0].name,
+            "AND"
+        );
+        assert!(matches!(results[1], Err(ProfileError::Io { .. })));
     }
 
     #[test]

@@ -9,6 +9,23 @@ use std::path::Path;
 
 use crate::ProfileError;
 
+/// Resource bounds are checked before XML parsing or typed-model allocation.
+pub(super) const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_XML_NODES: u32 = 100_000;
+pub(super) const MAX_CIRCUITS: usize = 256;
+pub(super) const MAX_COMPONENTS: usize = 20_000;
+pub(super) const MAX_WIRES: usize = 20_000;
+const MAX_COORDINATE: i64 = 1_000_000;
+const MAX_INPUTS: i64 = 64;
+const MAX_SIZE: i64 = 1_000;
+
+fn limit(context: &str, detail: String) -> ProfileError {
+    ProfileError::Limit {
+        chip: context.to_string(),
+        detail,
+    }
+}
+
 /// A point on the Logisim sheet. Connectivity is geometric, so coordinates are
 /// identity: two things are connected exactly when they share a point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -51,6 +68,73 @@ impl Comp {
     #[must_use]
     pub fn attr_bool(&self, key: &str) -> bool {
         matches!(self.attr(key), Some("true"))
+    }
+
+    /// Checks geometry before allocation or arithmetic. Missing attributes
+    /// retain Logisim's defaults; malformed attributes must not become defaults.
+    pub(super) fn validate_geometry(&self, context: &str) -> Result<(), ProfileError> {
+        self.loc.validate(context)?;
+        for (key, maximum) in [
+            ("inputs", Some(MAX_INPUTS)),
+            ("size", Some(MAX_SIZE)),
+            ("width", None),
+        ] {
+            if let Some(raw) = self.attr(key) {
+                let value = raw.parse::<i64>().map_err(|_| ProfileError::Parse {
+                    path: context.to_string(),
+                    message: format!(
+                        "component '{}' at {} has invalid integer {key}='{raw}'",
+                        self.name, self.loc
+                    ),
+                })?;
+                if value < 1 {
+                    return Err(ProfileError::Parse {
+                        path: context.to_string(),
+                        message: format!(
+                            "component '{}' at {} requires positive {key}, found {value}",
+                            self.name, self.loc
+                        ),
+                    });
+                }
+                if let Some(maximum) = maximum {
+                    if value > maximum {
+                        return Err(limit(
+                            context,
+                            format!(
+                                "component '{}' at {} has {key}={value}; maximum is {maximum}",
+                                self.name, self.loc
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+        if let Some(facing) = self.attr("facing") {
+            if !matches!(facing, "east" | "west" | "north" | "south") {
+                return Err(ProfileError::Parse {
+                    path: context.to_string(),
+                    message: format!(
+                        "component '{}' at {} has invalid facing='{facing}'",
+                        self.name, self.loc
+                    ),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Point {
+    pub(super) fn validate(self, context: &str) -> Result<(), ProfileError> {
+        if !(-MAX_COORDINATE..=MAX_COORDINATE).contains(&self.x)
+            || !(-MAX_COORDINATE..=MAX_COORDINATE).contains(&self.y)
+        {
+            return Err(limit(
+                context,
+                format!("coordinate {self} exceeds +/-{MAX_COORDINATE}"),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -108,7 +192,7 @@ fn parse_point(raw: &str, context: &str) -> Result<Point, ProfileError> {
         path: context.to_string(),
         message: format!("coordinate '{raw}' is missing a comma"),
     })?;
-    Ok(Point {
+    let point = Point {
         x: x.trim().parse().map_err(|_| ProfileError::Parse {
             path: context.to_string(),
             message: format!("coordinate '{raw}' has a non-numeric x"),
@@ -117,23 +201,39 @@ fn parse_point(raw: &str, context: &str) -> Result<Point, ProfileError> {
             path: context.to_string(),
             message: format!("coordinate '{raw}' has a non-numeric y"),
         })?,
-    })
+    };
+    Ok(point)
 }
 
 /// Reads and parses a `.circ` file.
 pub fn load_project(path: &Path) -> Result<LogisimProject, ProfileError> {
-    let text = std::fs::read_to_string(path).map_err(|source| ProfileError::Io {
-        path: path.display().to_string(),
-        source,
-    })?;
+    let text = crate::read_bounded(path, &path.display().to_string(), MAX_FILE_BYTES as u64)?;
     parse_project(&text, &path.display().to_string())
 }
 
 /// Parses `.circ` XML already in memory.
 pub fn parse_project(text: &str, context: &str) -> Result<LogisimProject, ProfileError> {
-    let document = roxmltree::Document::parse(text).map_err(|error| ProfileError::Parse {
-        path: context.to_string(),
-        message: error.to_string(),
+    if text.len() > MAX_FILE_BYTES {
+        return Err(limit(
+            context,
+            format!(".circ file exceeds {MAX_FILE_BYTES} bytes"),
+        ));
+    }
+    let document = roxmltree::Document::parse_with_options(
+        text,
+        roxmltree::ParsingOptions {
+            nodes_limit: MAX_XML_NODES,
+            ..roxmltree::ParsingOptions::default()
+        },
+    )
+    .map_err(|error| match error {
+        roxmltree::Error::NodesLimitReached => {
+            limit(context, format!("XML exceeds {MAX_XML_NODES} nodes"))
+        }
+        _ => ProfileError::Parse {
+            path: context.to_string(),
+            message: error.to_string(),
+        },
     })?;
     let root = document.root_element();
     if root.tag_name().name() != "project" {
@@ -144,6 +244,30 @@ pub fn parse_project(text: &str, context: &str) -> Result<LogisimProject, Profil
                 root.tag_name().name()
             ),
         });
+    }
+
+    // Count across the whole project before copying any circuit data. Unknown
+    // XML elements are also bounded by the parser's node and byte limits.
+    let mut counts = (0, 0, 0);
+    for circuit in root.children().filter(|node| node.has_tag_name("circuit")) {
+        counts.0 += 1;
+        counts.1 += circuit
+            .children()
+            .filter(|node| node.has_tag_name("comp"))
+            .count();
+        counts.2 += circuit
+            .children()
+            .filter(|node| node.has_tag_name("wire"))
+            .count();
+        for (kind, count, maximum) in [
+            ("circuits", counts.0, MAX_CIRCUITS),
+            ("components", counts.1, MAX_COMPONENTS),
+            ("wires", counts.2, MAX_WIRES),
+        ] {
+            if count > maximum {
+                return Err(limit(context, format!("project exceeds {maximum} {kind}")));
+            }
+        }
     }
 
     let source = root.attribute("source").unwrap_or_default().to_string();
@@ -175,10 +299,14 @@ pub fn parse_project(text: &str, context: &str) -> Result<LogisimProject, Profil
                     })?;
                     let mut attrs = BTreeMap::new();
                     for attribute in child.children().filter(|item| item.has_tag_name("a")) {
-                        if let (Some(key), Some(value)) =
-                            (attribute.attribute("name"), attribute.attribute("val"))
-                        {
-                            attrs.insert(key.to_string(), value.to_string());
+                        if let Some(key) = attribute.attribute("name") {
+                            if let Some(value) = attribute.attribute("val") {
+                                attrs.insert(key.to_string(), value.to_string());
+                            } else if matches!(key, "inputs" | "size" | "width" | "facing") {
+                                // Preserve malformed explicit values for validation
+                                // when this circuit is selected for elaboration.
+                                attrs.insert(key.to_string(), String::new());
+                            }
                         }
                     }
                     comps.push(Comp {

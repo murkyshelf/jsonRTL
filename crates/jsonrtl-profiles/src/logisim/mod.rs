@@ -25,6 +25,26 @@ fn project_name(path: &Path) -> String {
         .unwrap_or_else(|| "logisim".to_string())
 }
 
+fn convert_loaded_unit(
+    project: &model::LogisimProject,
+    project_name: &str,
+    unit: &str,
+) -> Result<ProjectConversion, ProfileError> {
+    if !project.circuits.contains_key(unit) {
+        return Err(ProfileError::UnknownUnit {
+            unit: unit.to_string(),
+        });
+    }
+    let flat = elaborate::elaborate(project, unit)?;
+    Ok(ProjectConversion {
+        project_name: project_name.to_string(),
+        circuits: vec![NamedCircuit {
+            name: unit.to_string(),
+            document: lower::lower(unit, &flat),
+        }],
+    })
+}
+
 impl crate::Profile for LogisimProfile {
     fn id(&self) -> &'static str {
         "logisim"
@@ -80,19 +100,20 @@ impl crate::Profile for LogisimProfile {
 
     fn convert_unit(&self, path: &Path, unit: &str) -> Result<ProjectConversion, ProfileError> {
         let project = model::load_project(path)?;
-        if !project.circuit_names.iter().any(|name| name == unit) {
-            return Err(ProfileError::UnknownUnit {
-                unit: unit.to_string(),
-            });
-        }
-        let flat = elaborate::elaborate(&project, unit)?;
-        Ok(ProjectConversion {
-            project_name: project_name(path),
-            circuits: vec![NamedCircuit {
-                name: unit.to_string(),
-                document: lower::lower(unit, &flat),
-            }],
-        })
+        convert_loaded_unit(&project, &project_name(path), unit)
+    }
+
+    fn convert_units(
+        &self,
+        path: &Path,
+        units: &[String],
+    ) -> Result<Vec<Result<ProjectConversion, ProfileError>>, ProfileError> {
+        let project = model::load_project(path)?;
+        let name = project_name(path);
+        Ok(units
+            .iter()
+            .map(|unit| convert_loaded_unit(&project, &name, unit))
+            .collect())
     }
 }
 

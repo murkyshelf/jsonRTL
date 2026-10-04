@@ -64,6 +64,7 @@ info never block future compilation.
 
 | Code | Severity | Trigger | Example | Likely fix |
 | --- | --- | --- | --- | --- |
+| `SCHEMA_UNSUPPORTED_VERSION` | error | A typed document declares an unsupported schema version. | `schemaVersion` is `9.9`. | Use `1.0` or `1.1`. |
 | `ID_DUPLICATE_COMPONENT` | error | A component ID occurs more than once. | Two components use `gate-1`. | Assign distinct stable component IDs. |
 | `ID_DUPLICATE_NET` | error | A net ID occurs more than once. | Two nets use `net-sum`. | Assign distinct stable net IDs. |
 | `ID_DUPLICATE_PORT` | error | A module-port ID occurs more than once. | Two ports use `input-a`. | Assign distinct stable module-port IDs. |
@@ -91,7 +92,7 @@ info never block future compilation.
 | `NET_NO_DRIVER` | error | A **bit** of a net is consumed but not driven. Related sources identify external outputs and/or component inputs. | Output port consumes an undriven net. | Add an external input, component output, or CONST driver. |
 | `NET_NO_CONSUMERS` | warning | A driven net has no external-output/component-input consumers. This is also the V1 policy for an unused required component output. | Gate output is unobserved. | Connect a useful consumer or remove the driver. |
 | `NET_UNUSED` | warning | A declared net has neither drivers nor consumers. | Orphan net declaration. | Remove or connect the net. |
-| `GRAPH_COMBINATIONAL_CYCLE` | error | A strongly connected component has multiple nodes or a self-edge. | Buffers feed each other. | Break feedback; V1 is acyclic combinational logic. |
+| `GRAPH_COMBINATIONAL_CYCLE` | error | Gate dependencies contain a feedback path through corresponding input/output bits. | Buffers feed each other on the same lanes. | Break feedback; V1 is acyclic combinational logic. |
 | `LIMIT_PORTS` | error | Module-port count exceeds the configured maximum. | 257 ports under defaults. | Reduce the circuit or raise trusted limits. |
 | `LIMIT_COMPONENTS` | error | Component count exceeds the configured maximum. | 10,001 components under defaults. | Reduce the circuit or raise trusted limits. |
 | `LIMIT_NETS` | error | Net count exceeds the configured maximum. | 20,001 nets under defaults. | Reduce the circuit or raise trusted limits. |
@@ -168,8 +169,13 @@ violation returns limit diagnostics immediately. Parameter counts are checked ne
 violations likewise stop deeper work. This deliberately prioritizes bounded behavior
 over collecting more diagnostics from an already over-limit typed model.
 
-Widths are compared numerically and never used to size buffers. Connection inspection
-is bounded by the fixed V1 catalog. The parser remains responsible for the raw
+Widths are checked against trusted limits before graph work. Electrical checks use
+intervals rather than expanding net bits. Cycle detection first finds component-level
+candidates, then tracks one byte per component lane only within those candidates;
+this distinguishes shifted slices from actual feedback. Invalid or ambiguous
+connections do not establish graph dependencies. Connection inspection is bounded
+by the fixed V1 catalog. Unsupported typed document versions stop semantic work.
+The parser remains responsible for the raw
 document-byte limit because a typed `CircuitDocument` no longer knows its original
 serialized size.
 

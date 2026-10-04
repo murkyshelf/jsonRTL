@@ -113,13 +113,13 @@ pub struct NetSlice {
 }
 
 impl NetSlice {
-    /// The number of bits the slice covers, or `None` when `lsb` exceeds `msb`.
+    /// The number of bits the slice covers, or `None` for an inverted range or
+    /// a width that cannot be represented by `u32`.
     #[must_use]
     pub const fn width(&self) -> Option<u32> {
-        if self.lsb > self.msb {
-            None
-        } else {
-            Some(self.msb - self.lsb + 1)
+        match self.msb.checked_sub(self.lsb) {
+            Some(distance) => distance.checked_add(1),
+            None => None,
         }
     }
 }

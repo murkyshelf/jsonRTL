@@ -1,6 +1,6 @@
 # jsonRTL
 
-**A UI-independent Rust kernel that turns canonical circuit JSON into deterministic, synthesizable Verilog-2001 — and imports other digital-logic tools' project formats along the way.**
+**A Rust circuit kernel with circuit JSON compilation, DLS/Logisim import, Verilog-to-DLS export, and Yosys/Icarus CLI tools.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
@@ -87,7 +87,7 @@ strictly, and a compiler that emits the same bytes every time.
 
 - **Deterministic.** Same input, same output, byte for byte. No timestamps, no
   hash-order, no randomness. Golden tests pin it.
-- **Strict, and specific about it.** 34 diagnostic codes with stable machine
+- **Strict, and specific about it.** 35 diagnostic codes with stable machine
   readable IDs, source-linked back to the offending element — not a stack trace.
 - **UI-independent.** The core crate knows nothing about editors, transports, or
   foreign formats. Dependencies point strictly inward.
@@ -113,7 +113,10 @@ which must be on your `PATH`. Install elsewhere with `--root ~/.local`.
 
 ```sh
 jsonrtl profiles                        # what foreign formats can be imported?
+jsonrtl tools                           # installed Yosys, Icarus, and VVP versions
+jsonrtl check top.v --top top            # check with both HDL compilers
 jsonrtl compile circuit.json --stdout   # canonical JSON -> Verilog
+jsonrtl export top.v --top top --out build/top  # Verilog -> Digital-Logic-Sim
 jsonrtl validate circuit.json           # just check it
 jsonrtl schema                          # print the JSON Schema
 ```
@@ -148,6 +151,57 @@ endmodule
 
 Buses survive the trip. A 16-bit adder imports as a module with real bus ports —
 `input wire [7:0] A0;` — not 34 scalar wires.
+
+### Exporting Verilog to Digital-Logic-Sim
+
+Install **Yosys with ABC** for this command (on Debian/Ubuntu: `sudo apt install
+yosys`). The exporter creates a native DLS 2.1.6 project with NAND logic, bus
+converters, and reusable register/latch chips. It supports rising/falling
+registers, enables, and synchronous/asynchronous resets.
+
+```sh
+# Keep the clock as a manually controlled input.
+jsonrtl export top.v --top top --profile dls --out build/top
+
+# Connect the clk input to DLS's native CLOCK in an additional wrapper chip.
+jsonrtl export examples/verilog/counter.v --top counter --out build/counter --clock clk
+```
+
+Copy the complete generated directory into DLS's `Projects` save directory,
+restart DLS, select the project, and open the chip named by the command. The
+directory contains `ProjectDescription.json` and `Chips/*.json`; existing
+directories are refused. Wider ports use labeled 8/4/1-bit chunks. See the
+[CLI reference](docs/cli.md#export-options) for save locations, limits, and
+unsupported HDL constructs. The [upstream simulator verification
+suite](scripts/dls-verification/README.md) compares exported behavior with Icarus.
+
+### Checking, synthesis, and test-bench simulation
+
+Install Yosys and Icarus Verilog (on Debian/Ubuntu: `sudo apt install yosys
+iverilog`). Icarus includes the `vvp` runtime. The bundled counter has a test
+bench that checks counting, enable hold, and asynchronous reset:
+
+```sh
+jsonrtl tools
+jsonrtl check examples/verilog/counter.v --top counter
+jsonrtl synth examples/verilog/counter.v --top counter --out build/counter-synth
+jsonrtl simulate examples/verilog/counter.v examples/verilog/counter_tb.v \
+  --top counter_tb --out build/counter-sim
+# Run the same assertions against the synthesized gate netlist.
+jsonrtl simulate build/counter-synth/netlist.v examples/verilog/counter_tb.v \
+  --top counter_tb --out build/counter-netlist-sim
+```
+
+Synthesis saves `netlist.v`, `netlist.json`, `statistics.json`, and `report.log`.
+Simulation saves the compiled program, compiler/runtime logs, and test-bench
+waveforms such as `counter.vcd`. Read `stdout.txt` for the assertion result;
+`$fatal`, `$stop`, and deadlines produce failures without publishing a result
+directory. Each `--out` must be new. Use `--tool iverilog` to check test benches,
+and `--system-verilog` to enable the installed compiler's SystemVerilog subset.
+
+All HDL commands use a shared bounded process runner; see the [CLI
+guide](docs/cli.md#hdl-tool-options) for executable overrides, plus arguments,
+resource limits, and the scope of trusted local execution.
 
 ## Import profiles
 
@@ -191,7 +245,7 @@ crates/
   jsonrtl/           transport-free model, parser, validator, IR, compiler
   jsonrtl-cli/       command-line boundary          -> depends on jsonrtl
   jsonrtl-api/       Axum service boundary          -> depends on jsonrtl
-  jsonrtl-profiles/  foreign-format import profiles -> depends on jsonrtl
+  jsonrtl-profiles/  foreign-format import/export   -> depends on jsonrtl
 profiles/            per-profile manifest, docs, and example projects
 schemas/             canonical JSON Schema and contract examples
 tests/golden/        byte-exact Verilog expectations
@@ -199,6 +253,11 @@ tests/golden/        byte-exact Verilog expectations
 
 Dependencies point strictly inward. Nothing the core depends on knows about
 Clap, Axum, or any foreign format.
+
+The API runs parsing, kernel work, and response serialization on blocking
+workers, with two jobs per router by default. Embedded services can configure
+this through `RouterBuilder::max_concurrent_kernel_work`; waiting requests yield
+to the async runtime, and `/health` remains independent of kernel capacity.
 
 ## What is implemented
 
@@ -211,12 +270,16 @@ Clap, Axum, or any foreign format.
 - Synthesizable continuous-assignment Verilog-2001 with one-based source maps
 - Configurable resource limits, enforced before any deep work
 - Import profiles for DLS and Logisim
+- Verilog-to-DLS export through Yosys, including registers, latches, and clocks
+- Yosys synthesis/checking and Icarus test-bench simulation through the CLI
+- Bounded tool output, deadlines, Unix process cleanup, and protected result publication
 - CLI and Axum shells over the reusable core
 
-**Not implemented, deliberately:** simulation, physical design, sequential
-elements and clocks, hierarchical module instantiation, and tri-state buffers.
-These are future schema versions, not hidden behavior — a document that needs
-them is rejected, never approximated.
+The canonical kernel and import path remain combinational: sequential elements,
+clocks, hierarchical module instantiation, and tri-state buffers require future
+schema versions. The Verilog exporter handles registers and clocks directly in
+the DLS profile without changing that contract. HDL simulation is delegated to
+Icarus in the CLI; simulation and physical design remain outside the kernel.
 
 ## Documentation
 
@@ -227,7 +290,7 @@ them is rejected, never approximated.
 | [`docs/cli.md`](docs/cli.md) | Every command, option, and exit code |
 | [`docs/profiles.md`](docs/profiles.md) | Import profiles and how to add one |
 | [`docs/compiler.md`](docs/compiler.md) | The emitted Verilog subset |
-| [`docs/diagnostics.md`](docs/diagnostics.md) | All 34 diagnostic codes |
+| [`docs/diagnostics.md`](docs/diagnostics.md) | All 35 diagnostic codes |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 
 ## Development
@@ -239,9 +302,9 @@ cargo test --workspace
 cargo test --doc --workspace
 ```
 
-CI runs all four on every push and pull request. Golden Verilog is byte-exact,
-so a formatting change to the emitter fails the build until the goldens are
-updated deliberately.
+CI runs these checks on every push and pull request and also checks the locked
+workspace with Rust 1.85. Golden Verilog is byte-exact, so a formatting change to
+the emitter fails the build until the goldens are updated deliberately.
 
 ## License
 

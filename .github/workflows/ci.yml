@@ -10,6 +10,16 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  msrv:
+    name: Rust 1.85 compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install minimum Rust toolchain
+        uses: dtolnay/rust-toolchain@1.85.0
+      - name: Check locked workspace
+        run: cargo check --workspace --all-targets --locked
+
   check:
     name: fmt, clippy, test, build
     runs-on: ubuntu-latest
@@ -33,14 +43,49 @@ jobs:
       - name: Format check
         run: cargo fmt --all --check
 
+      - name: Install HDL tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes yosys iverilog
+
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
 
       - name: Doc tests
-        run: cargo test --doc --workspace
+        run: cargo test --doc --workspace --locked
 
       - name: Release build
-        run: cargo build --workspace --release
+        run: cargo build --workspace --release --locked
+
+      - name: Check, synthesize, and simulate the counter
+        run: |
+          hdl_ci_results=$(mktemp -d)
+          target/release/jsonrtl tools
+          target/release/jsonrtl check examples/verilog/counter.v --top counter
+          target/release/jsonrtl synth examples/verilog/counter.v --top counter --out "$hdl_ci_results/synth"
+          target/release/jsonrtl simulate examples/verilog/counter.v examples/verilog/counter_tb.v --top counter_tb --out "$hdl_ci_results/sim"
+          target/release/jsonrtl simulate "$hdl_ci_results/synth/netlist.v" examples/verilog/counter_tb.v --top counter_tb --out "$hdl_ci_results/netlist-sim"
+          test -s "$hdl_ci_results/sim/counter.vcd"
+          test -s "$hdl_ci_results/netlist-sim/counter.vcd"
+
+      - name: Install simulator verification SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Check out pinned Digital-Logic-Sim source
+        uses: actions/checkout@v4
+        with:
+          repository: SebLague/Digital-Logic-Sim
+          ref: 7aeb66ddff44f916ff7fafb043ab4476ef4409fe
+          path: .dls-upstream
+
+      - name: Verify exports in the upstream simulator
+        env:
+          DLS_SOURCE: ${{ github.workspace }}/.dls-upstream
+        run: |
+          bash scripts/dls-verification/run.sh --self-test
+          python3 scripts/dls-verification/verify_export.py --cli target/release/jsonrtl

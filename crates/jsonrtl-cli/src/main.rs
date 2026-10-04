@@ -17,6 +17,10 @@ use jsonrtl_profiles::{
 use serde::Serialize;
 use serde_json::{Value, json};
 
+mod export;
+mod hdl;
+mod toolchain;
+
 const EXIT_INVALID: u8 = 2;
 const EXIT_IO: u8 = 3;
 const EXIT_INTERNAL: u8 = 4;
@@ -61,6 +65,16 @@ enum Command {
     Compile(CompileArgs),
     /// Import a foreign project (e.g. DLS) and compile each unit to Verilog.
     Import(ImportArgs),
+    /// Synthesize Verilog into a Digital-Logic-Sim project.
+    Export(export::ExportArgs),
+    /// Check Verilog with Yosys and/or Icarus Verilog.
+    Check(hdl::CheckArgs),
+    /// Synthesize Verilog to a gate netlist using Yosys.
+    Synth(hdl::SynthArgs),
+    /// Compile and run a test bench using Icarus Verilog and VVP.
+    Simulate(hdl::SimulateArgs),
+    /// Report installed Yosys, Icarus Verilog and VVP versions.
+    Tools(hdl::ToolsArgs),
     /// List the import profiles available in this build.
     Profiles,
     /// Print the canonical circuit JSON Schema.
@@ -179,6 +193,11 @@ fn run(cli: Cli) -> Result<(), u8> {
         Command::Validate(arguments) => validate_command(arguments, cli.diagnostics),
         Command::Compile(arguments) => compile_command(arguments, cli.diagnostics),
         Command::Import(arguments) => import_command(arguments, cli.diagnostics),
+        Command::Export(arguments) => export::run(arguments, cli.diagnostics),
+        Command::Check(arguments) => hdl::check(arguments, cli.diagnostics),
+        Command::Synth(arguments) => hdl::synth(arguments, cli.diagnostics),
+        Command::Simulate(arguments) => hdl::simulate(arguments, cli.diagnostics),
+        Command::Tools(arguments) => hdl::tools(arguments, cli.diagnostics),
         Command::Profiles => {
             print_profiles(cli.diagnostics);
             Ok(())
@@ -284,8 +303,16 @@ fn import_command(arguments: ImportArgs, format: DiagnosticFormat) -> Result<(),
             code
         })?;
         let mut kept = Vec::new();
-        for unit in &units.unit_names {
-            match profile.convert_unit(&project, unit) {
+        let conversions = profile
+            .convert_units(&project, &units.unit_names)
+            .map_err(|error| {
+                let failure = profile_failure(error);
+                let code = failure.exit_code;
+                render_failure(format, &failure);
+                code
+            })?;
+        for (unit, conversion) in units.unit_names.iter().zip(conversions) {
+            match conversion {
                 Ok(conversion) => kept.extend(conversion.circuits),
                 Err(error) => skipped.push(SkippedUnit {
                     unit: unit.clone(),

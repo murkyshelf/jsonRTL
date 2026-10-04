@@ -1,6 +1,6 @@
 //! Lowers a flat Logisim netlist into a canonical [`CircuitDocument`].
 //!
-//! Logisim gates take up to 32 inputs; the canonical catalog is 2-input, so a
+//! The importer accepts gates up to 64 inputs; the canonical catalog is 2-input, so a
 //! wider gate folds into a balanced-left chain of native gates. Inverting gates
 //! fold on their non-inverting base and invert once at the end, which is what
 //! Logisim means by an n-input NAND.

@@ -12,6 +12,39 @@ use jsonrtl::CircuitDocument;
 pub mod dls;
 pub mod logisim;
 
+/// Reads an untrusted source file with a bounded byte count.
+pub(crate) fn read_bounded(
+    path: &Path,
+    unit: &str,
+    max_bytes: u64,
+) -> Result<String, ProfileError> {
+    use std::io::Read;
+
+    let io_error = |source| ProfileError::Io {
+        path: path.display().to_string(),
+        source,
+    };
+    let limit_error = || ProfileError::Limit {
+        chip: unit.to_string(),
+        detail: format!("source file '{}' exceeds {max_bytes} bytes", path.display()),
+    };
+    let file = std::fs::File::open(path).map_err(io_error)?;
+    if file.metadata().map_err(io_error)?.len() > max_bytes {
+        return Err(limit_error());
+    }
+    // The file may grow after metadata is checked, and streams may report a
+    // length of zero. Bound the read itself as well.
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(io_error)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(limit_error());
+    }
+    String::from_utf8(bytes)
+        .map_err(|error| io_error(std::io::Error::new(std::io::ErrorKind::InvalidData, error)))
+}
+
 /// One canonical circuit produced from a foreign project, named after its
 /// source unit (for DLS, the chip name).
 #[derive(Debug, Clone, PartialEq)]
@@ -147,6 +180,21 @@ pub trait Profile {
     /// accumulate chips that use constructs outside the supported subset, and
     /// one of them must not make every other chip unreachable.
     fn convert_unit(&self, path: &Path, unit: &str) -> Result<ProjectConversion, ProfileError>;
+
+    /// Converts selected units independently, returning one result per unit in
+    /// the given order. Profiles can override this to share source metadata and
+    /// dependency caches across a partial import. The default preserves
+    /// existing profile implementations.
+    fn convert_units(
+        &self,
+        path: &Path,
+        units: &[String],
+    ) -> Result<Vec<Result<ProjectConversion, ProfileError>>, ProfileError> {
+        Ok(units
+            .iter()
+            .map(|unit| self.convert_unit(path, unit))
+            .collect())
+    }
 }
 
 /// Every profile known to this build, in stable order.

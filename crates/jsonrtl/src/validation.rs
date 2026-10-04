@@ -32,6 +32,19 @@ impl Kernel {
     #[must_use]
     pub fn validate(&self, document: &CircuitDocument) -> ValidationReport {
         let mut diagnostics = preflight_limit_diagnostics(document, &self.limits);
+        if !crate::SUPPORTED_SCHEMA_VERSIONS.contains(&document.schema_version.as_str()) {
+            diagnostics.push(Diagnostic::new(
+                DiagnosticCode::SchemaUnsupportedVersion,
+                DiagnosticSeverity::Error,
+                format!("Unsupported schema version '{}'.", document.schema_version),
+                circuit_source(document, "schemaVersion"),
+                Vec::new(),
+                Some(format!(
+                    "Use one of the supported versions: {}.",
+                    crate::SUPPORTED_SCHEMA_VERSIONS.join(", ")
+                )),
+            ));
+        }
         if !diagnostics.is_empty() {
             return ValidationReport::from_unsorted(diagnostics);
         }
@@ -46,7 +59,7 @@ impl Kernel {
         validate_electrical_roles(document, &index, &roles, &mut diagnostics);
 
         if index.duplicate_component_ids.is_empty() && index.duplicate_net_ids.is_empty() {
-            validate_cycles(document, &index, &roles, &mut diagnostics);
+            validate_cycles(document, &index, &roles, &self.limits, &mut diagnostics);
         }
 
         ValidationReport::from_unsorted(diagnostics)
@@ -540,7 +553,7 @@ fn validate_width(
 
 /// True when this document's declared version permits sliced connections.
 fn slices_allowed(document: &CircuitDocument) -> bool {
-    document.schema_version.as_str() != "1.0"
+    document.schema_version.as_str() == crate::SLICE_SCHEMA_VERSION
 }
 
 /// Checks one connection's width against its net, sliced or whole.
@@ -570,40 +583,27 @@ fn validate_connection_width(
         return;
     };
 
-    // An inverted or overhanging range has no meaningful width, so report the
-    // range itself and stop; a width diagnostic would only be noise.
-    let Some(slice_width) = slice.width() else {
+    // Check bounds before width arithmetic, including typed values outside the
+    // JSON Schema and slices on a zero-width net.
+    if slice.lsb > slice.msb || slice.msb >= net.width {
         diagnostics.push(Diagnostic::new(
             DiagnosticCode::SliceOutOfRange,
             DiagnosticSeverity::Error,
             format!(
-                "Component '{}' logical port '{}' slices net '{}' as [{}:{}], but the most-significant index must not be below the least-significant one.",
-                component.id, logical_port, net.id, slice.msb, slice.lsb
+                "Component '{}' logical port '{}' slices net '{}' as [{}:{}], outside its {}-bit range or with inverted indices.",
+                component.id, logical_port, net.id, slice.msb, slice.lsb, net.width
             ),
             component_source_with_net(document, component, field, &net.id),
             vec![net_source(document, net, "width")],
-            Some("Give the slice an msb greater than or equal to its lsb.".into()),
-        ));
-        return;
-    };
-
-    if slice.msb >= net.width {
-        diagnostics.push(Diagnostic::new(
-            DiagnosticCode::SliceOutOfRange,
-            DiagnosticSeverity::Error,
-            format!(
-                "Component '{}' logical port '{}' slices bit {} of net '{}', which is only {} bits wide.",
-                component.id, logical_port, slice.msb, net.id, net.width
-            ),
-            component_source_with_net(document, component, field, &net.id),
-            vec![net_source(document, net, "width")],
-            Some(format!(
-                "Index bits 0 through {} of this net.",
-                net.width - 1
-            )),
+            Some(if net.width == 0 {
+                "Give the referenced net a positive width.".into()
+            } else {
+                format!("Index bits 0 through {}, with msb >= lsb.", net.width - 1)
+            }),
         ));
         return;
     }
+    let slice_width = slice.width().expect("in-bounds slice width fits u32");
 
     if slice_width != component.width {
         diagnostics.push(Diagnostic::new(
@@ -899,10 +899,8 @@ fn merge_ranges(mut ranges: Vec<(u32, u32)>) -> Vec<(u32, u32)> {
 /// The first sub-range of `range` that no range in `covered` includes.
 fn first_gap(range: (u32, u32), covered: &[(u32, u32)]) -> Option<(u32, u32)> {
     let mut cursor = range.0;
-    for (start, end) in covered {
-        if *end <= cursor {
-            continue;
-        }
+    let first = covered.partition_point(|(_, end)| *end <= cursor);
+    for (start, end) in &covered[first..] {
         if *start > cursor {
             return Some((cursor, (*start).min(range.1)));
         }
@@ -1023,28 +1021,37 @@ fn validate_electrical_roles(
 
         // Two drivers only conflict where their bit ranges overlap, so a merger
         // driving each bit of one net separately stays legal.
-        let mut conflicts: Vec<&Endpoint> = Vec::new();
+        let mut conflicting = vec![false; net_roles.drivers.len()];
         let mut overlap: Option<(u32, u32)> = None;
+        let mut furthest: Option<usize> = None;
         for (position, driver) in net_roles.drivers.iter().enumerate() {
-            for other in &net_roles.drivers[position + 1..] {
-                if !driver.overlaps(other) {
-                    continue;
+            if driver.is_empty() {
+                continue;
+            }
+            if let Some(previous) = furthest {
+                let other = &net_roles.drivers[previous];
+                if driver.overlaps(other) {
+                    let shared = (driver.bits.0, driver.bits.1.min(other.bits.1));
+                    overlap = Some(overlap.map_or(shared, |(start, end)| {
+                        (start.min(shared.0), end.max(shared.1))
+                    }));
+                    conflicting[position] = true;
+                    conflicting[previous] = true;
                 }
-                let shared = (
-                    driver.bits.0.max(other.bits.0),
-                    driver.bits.1.min(other.bits.1),
-                );
-                overlap = Some(overlap.map_or(shared, |(start, end): (u32, u32)| {
-                    (start.min(shared.0), end.max(shared.1))
-                }));
-                for endpoint in [driver, other] {
-                    if !conflicts.contains(&endpoint) {
-                        conflicts.push(endpoint);
-                    }
+                if driver.bits.1 > other.bits.1 {
+                    furthest = Some(position);
                 }
+            } else {
+                furthest = Some(position);
             }
         }
         if let Some(range) = overlap {
+            let conflicts: Vec<_> = net_roles
+                .drivers
+                .iter()
+                .zip(conflicting)
+                .filter_map(|(driver, conflicts)| conflicts.then_some(driver))
+                .collect();
             diagnostics.push(Diagnostic::new(
                 DiagnosticCode::NetMultipleDrivers,
                 DiagnosticSeverity::Error,
@@ -1131,35 +1138,77 @@ fn validate_cycles(
     document: &CircuitDocument,
     index: &DocumentIndex<'_>,
     roles: &BTreeMap<&str, NetRoles>,
+    limits: &KernelLimits,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let nodes: BTreeSet<String> = document
+    // Invalid widths/references have their own diagnostics. Only well-formed
+    // bitwise components can contribute meaningful graph edges.
+    let components: BTreeMap<&str, &Component> = document
         .circuit
         .components
         .iter()
-        .filter(|component| component_definition(component.component_type).is_some())
-        .map(|component| component.id.clone())
+        .filter(|component| {
+            component.width > 0
+                && component.width <= limits.max_width
+                && component_definition(component.component_type).is_some_and(|definition| {
+                    definition.ports.iter().all(|port| {
+                        component
+                            .connections
+                            .get(port.name)
+                            .is_some_and(|connection| {
+                                index
+                                    .unique_nets
+                                    .get(connection.net_id())
+                                    .is_some_and(|net| {
+                                        net.width > 0
+                                            && net.width <= limits.max_width
+                                            && connection.bits(net.width).len()
+                                                == component.width as usize
+                                    })
+                            })
+                    })
+                })
+        })
+        .map(|component| (component.id.as_str(), component))
         .collect();
-    let mut adjacency: BTreeMap<String, BTreeSet<String>> = nodes
-        .iter()
-        .map(|node| (node.clone(), BTreeSet::new()))
+    let mut adjacency: BTreeMap<String, BTreeSet<String>> = components
+        .keys()
+        .map(|node| ((*node).to_owned(), BTreeSet::new()))
         .collect();
     let mut edge_nets: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
+    let drivers_by_net: BTreeMap<&str, &[Endpoint]> = roles
+        .iter()
+        .filter(|(_, net_roles)| {
+            !net_roles
+                .drivers
+                .windows(2)
+                .any(|pair| pair[0].overlaps(&pair[1]))
+        })
+        .map(|(net_id, net_roles)| (*net_id, net_roles.drivers.as_slice()))
+        .collect();
 
-    // An edge exists only where a driver and a consumer share bits, so a
-    // shifter that routes bit 0 of a net out and bit 1 back in is not a cycle.
+    // The component graph cheaply rules out most cycles without expanding any
+    // bus. Drivers are disjoint and sorted, so only overlapping intervals need
+    // inspection. Ambiguous nets cannot establish a valid dependency.
     for (net_id, net_roles) in roles {
-        for driver in &net_roles.drivers {
-            let Some(driver_id) = driver.component_id.as_deref() else {
+        let Some(drivers) = drivers_by_net.get(net_id) else {
+            continue;
+        };
+        for consumer in &net_roles.consumers {
+            let Some(consumer_id) = consumer.component_id.as_deref() else {
                 continue;
             };
-            for consumer in &net_roles.consumers {
-                let Some(consumer_id) = consumer.component_id.as_deref() else {
+            if !components.contains_key(consumer_id) {
+                continue;
+            }
+            let first = drivers.partition_point(|driver| driver.bits.1 <= consumer.bits.0);
+            for driver in drivers[first..]
+                .iter()
+                .take_while(|driver| driver.bits.0 < consumer.bits.1)
+            {
+                let Some(driver_id) = driver.component_id.as_deref() else {
                     continue;
                 };
-                if !driver.overlaps(consumer) {
-                    continue;
-                }
                 if let Some(neighbors) = adjacency.get_mut(driver_id) {
                     neighbors.insert(consumer_id.to_owned());
                     edge_nets
@@ -1171,13 +1220,18 @@ fn validate_cycles(
         }
     }
 
-    let components = strongly_connected_components(&adjacency);
-    for component_ids in components {
+    let groups = strongly_connected_components(&adjacency);
+    for component_ids in groups {
         let is_self_loop = component_ids.len() == 1
             && adjacency
                 .get(&component_ids[0])
                 .is_some_and(|neighbors| neighbors.contains(&component_ids[0]));
         if component_ids.len() == 1 && !is_self_loop {
+            continue;
+        }
+        // A component-level cycle may connect different, independent lanes.
+        // Refine only these candidates using actual gate input/output offsets.
+        if !has_bit_cycle(&component_ids, &components, index, &drivers_by_net) {
             continue;
         }
 
@@ -1216,8 +1270,107 @@ fn validate_cycles(
             ),
         ));
     }
+}
 
-    let _ = index;
+fn has_bit_cycle(
+    component_ids: &[String],
+    components: &BTreeMap<&str, &Component>,
+    index: &DocumentIndex<'_>,
+    drivers_by_net: &BTreeMap<&str, &[Endpoint]>,
+) -> bool {
+    if component_ids
+        .iter()
+        .all(|id| components[id.as_str()].width == 1)
+    {
+        return true;
+    }
+    let positions: BTreeMap<&str, usize> = component_ids
+        .iter()
+        .enumerate()
+        .map(|(position, id)| (id.as_str(), position))
+        .collect();
+    // At most one byte per lane in a candidate SCC, never per declared net bit.
+    let mut colors: Vec<Vec<u8>> = component_ids
+        .iter()
+        .map(|id| vec![0; components[id.as_str()].width as usize])
+        .collect();
+    struct Input<'a> {
+        start: u32,
+        drivers: &'a [Endpoint],
+    }
+    let inputs: Vec<Vec<Input<'_>>> = component_ids
+        .iter()
+        .map(|id| {
+            let component = components[id.as_str()];
+            component_definition(component.component_type)
+                .expect("catalog component")
+                .ports
+                .iter()
+                .filter(|port| port.direction == PortDirection::Input)
+                .map(|port| {
+                    let connection = &component.connections[port.name];
+                    let net = index.unique_nets[connection.net_id()];
+                    Input {
+                        start: connection.bits(net.width).start,
+                        drivers: drivers_by_net
+                            .get(connection.net_id())
+                            .copied()
+                            .unwrap_or(&[]),
+                    }
+                })
+                .collect()
+        })
+        .collect();
+    // DFS follows producers; all catalog gates are bitwise, so lane k of the
+    // output depends only on lane k of each input. Keep the traversal iterative.
+    let mut stack = Vec::new();
+    for start in 0..component_ids.len() {
+        for bit in 0..colors[start].len() {
+            if colors[start][bit] != 0 {
+                continue;
+            }
+            colors[start][bit] = 1;
+            stack.push((start, bit, 0));
+            while let Some((component, lane, next_input)) = stack.last_mut() {
+                if *next_input == inputs[*component].len() {
+                    colors[*component][*lane] = 2;
+                    stack.pop();
+                    continue;
+                }
+                let input = &inputs[*component][*next_input];
+                *next_input += 1;
+                let net_bit = input.start + *lane as u32;
+                let position = input
+                    .drivers
+                    .partition_point(|driver| driver.bits.1 <= net_bit);
+                let Some(driver) = input
+                    .drivers
+                    .get(position)
+                    .filter(|driver| driver.bits.0 <= net_bit)
+                else {
+                    continue;
+                };
+                let Some(producer) = driver
+                    .component_id
+                    .as_deref()
+                    .and_then(|id| positions.get(id))
+                    .copied()
+                else {
+                    continue;
+                };
+                let producer_lane = (net_bit - driver.bits.0) as usize;
+                match colors[producer][producer_lane] {
+                    1 => return true,
+                    0 => {
+                        colors[producer][producer_lane] = 1;
+                        stack.push((producer, producer_lane, 0));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    false
 }
 
 fn strongly_connected_components(

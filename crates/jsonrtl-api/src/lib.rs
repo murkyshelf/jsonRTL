@@ -1,4 +1,10 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    num::NonZeroUsize,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use axum::{
     Json, Router,
@@ -14,6 +20,7 @@ use jsonrtl::{
     VerilogIdentifier,
 };
 use serde::Serialize;
+use tokio::sync::Semaphore;
 
 static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -144,6 +151,7 @@ fn request_id() -> String {
 pub struct RouterBuilder {
     kernel_limits: KernelLimits,
     request_body_limit: usize,
+    max_concurrent_kernel_work: NonZeroUsize,
 }
 
 impl RouterBuilder {
@@ -152,6 +160,7 @@ impl RouterBuilder {
         Self {
             kernel_limits: KernelLimits::default(),
             request_body_limit: KernelLimits::default().max_document_bytes,
+            max_concurrent_kernel_work: NonZeroUsize::new(2).unwrap(),
         }
     }
 
@@ -167,14 +176,32 @@ impl RouterBuilder {
         self
     }
 
+    /// Limits parsing, validation, compilation, and response serialization to
+    /// this many blocking jobs per router, including jobs awaiting a thread.
+    /// Defaults to two. Further requests wait asynchronously after the bounded
+    /// body read; `/health` does not wait for these jobs.
+    ///
+    /// A cancelled request retains its slot until its blocking job exits.
+    /// Clones of the finished router share the limit.
+    ///
+    /// # Panics
+    ///
+    /// [`Self::finish`] panics if the limit exceeds [`Semaphore::MAX_PERMITS`].
+    #[must_use]
+    pub fn max_concurrent_kernel_work(mut self, jobs: NonZeroUsize) -> Self {
+        self.max_concurrent_kernel_work = jobs;
+        self
+    }
+
     pub fn finish(self) -> Router {
         let kernel = Kernel::new(self.kernel_limits);
+        let work_slots = Arc::new(Semaphore::new(self.max_concurrent_kernel_work.get()));
         Router::new()
             .route("/", get(site))
             .route("/health", get(health))
             .route("/api/v1/validate", post(validate))
             .route("/api/v1/compile/verilog", post(compile_verilog))
-            .layer(Extension((kernel, self.request_body_limit)))
+            .layer(Extension((kernel, self.request_body_limit, work_slots)))
     }
 }
 
@@ -424,6 +451,40 @@ fn parse_error_diagnostics(error: &ParseError) -> Vec<ApiDiagnostic> {
 // Handlers
 // ---------------------------------------------------------------------------
 
+async fn run_kernel_work(
+    work_slots: Arc<Semaphore>,
+    id: &str,
+    work: impl FnOnce() -> Response + Send + 'static,
+) -> Response {
+    let permit = match work_slots.acquire_owned().await {
+        Ok(permit) => permit,
+        Err(_) => {
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                id,
+                "INTERNAL_ERROR",
+                "Kernel work queue is unavailable.",
+            );
+        }
+    };
+    match tokio::task::spawn_blocking(move || {
+        // The blocking job owns the permit, so cancelling its async caller does
+        // not let another job start while this one is still running.
+        let _permit = permit;
+        work()
+    })
+    .await
+    {
+        Ok(response) => response,
+        Err(_) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            id,
+            "INTERNAL_ERROR",
+            "Kernel work failed to complete.",
+        ),
+    }
+}
+
 async fn site() -> Html<&'static str> {
     Html(APP_HTML)
 }
@@ -443,7 +504,7 @@ async fn health() -> Response {
 }
 
 async fn validate(
-    Extension((kernel, max_body)): Extension<(Kernel, usize)>,
+    Extension((kernel, max_body, work_slots)): Extension<(Kernel, usize, Arc<Semaphore>)>,
     request: Request,
 ) -> Response {
     let id = request_id();
@@ -478,141 +539,163 @@ async fn validate(
         }
     };
 
-    let text = match std::str::from_utf8(&body_bytes) {
-        Ok(text) => text.to_string(),
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                &id,
-                "MALFORMED_JSON",
-                "Request body is not valid UTF-8.".to_owned(),
-            );
-        }
-    };
-
-    let document = match CircuitDocument::from_json_with_limits(&text, kernel.limits()) {
-        Ok(doc) => doc,
-        Err(error) => {
-            let diagnostics = parse_error_diagnostics(&error);
-            let (status, category, message) = classify_parse_error(&error);
-            if diagnostics.is_empty() {
-                return error_response(status, &id, category, message);
-            }
-            return error_response_with_diagnostics(status, &id, category, message, diagnostics);
-        }
-    };
-
-    let report = kernel.validate(&document);
-    let diagnostics: Vec<ApiDiagnostic> = report
-        .diagnostics()
-        .iter()
-        .map(|d| ApiDiagnostic::Diagnostic(d.clone()))
-        .collect();
-
-    with_request_id(
-        &id,
-        Json(ValidateResponse {
-            success: true,
-            valid: !report.has_errors(),
-            diagnostics,
-            schema_version: SUPPORTED_SCHEMA_VERSION,
-            compiler_version: KERNEL_VERSION,
-            request_id: id.clone(),
-        }),
-    )
-}
-
-async fn compile_verilog(
-    Extension((kernel, max_body)): Extension<(Kernel, usize)>,
-    request: Request,
-) -> Response {
-    let id = request_id();
-
-    let content_type_error = require_json_content_type(request.headers());
-    if let Err(msg) = content_type_error {
-        return error_response(
-            StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            &id,
-            "UNSUPPORTED_MEDIA_TYPE",
-            msg,
-        );
-    }
-
-    let body_bytes = match to_bytes(request.into_body(), max_body).await {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            if is_length_limit_error(&err) {
+    let work_id = id.clone();
+    run_kernel_work(work_slots, &id, move || {
+        let id = work_id;
+        let text = match std::str::from_utf8(&body_bytes) {
+            Ok(text) => text,
+            Err(_) => {
                 return error_response(
-                    StatusCode::PAYLOAD_TOO_LARGE,
+                    StatusCode::BAD_REQUEST,
                     &id,
-                    "DOCUMENT_TOO_LARGE",
-                    format!("Request body exceeds the {} byte limit.", max_body),
+                    "MALFORMED_JSON",
+                    "Request body is not valid UTF-8.".to_owned(),
                 );
             }
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                &id,
-                "INTERNAL_ERROR",
-                "Failed to read request body.".to_owned(),
-            );
-        }
-    };
+        };
 
-    let text = match std::str::from_utf8(&body_bytes) {
-        Ok(text) => text.to_string(),
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                &id,
-                "MALFORMED_JSON",
-                "Request body is not valid UTF-8.".to_owned(),
-            );
-        }
-    };
-
-    let document = match CircuitDocument::from_json_with_limits(&text, kernel.limits()) {
-        Ok(doc) => doc,
-        Err(error) => {
-            let diagnostics = parse_error_diagnostics(&error);
-            let (status, category, message) = classify_parse_error(&error);
-            if diagnostics.is_empty() {
-                return error_response(status, &id, category, message);
+        let document = match CircuitDocument::from_json_with_limits(text, kernel.limits()) {
+            Ok(doc) => doc,
+            Err(error) => {
+                let diagnostics = parse_error_diagnostics(&error);
+                let (status, category, message) = classify_parse_error(&error);
+                if diagnostics.is_empty() {
+                    return error_response(status, &id, category, message);
+                }
+                return error_response_with_diagnostics(
+                    status,
+                    &id,
+                    category,
+                    message,
+                    diagnostics,
+                );
             }
-            return error_response_with_diagnostics(status, &id, category, message, diagnostics);
-        }
-    };
+        };
 
-    let result = kernel.compile_verilog(&document, &CompileOptions::default());
-    let diagnostics: Vec<ApiDiagnostic> = result
-        .diagnostics
-        .diagnostics()
-        .iter()
-        .map(|d| ApiDiagnostic::Diagnostic(d.clone()))
-        .collect();
+        let report = kernel.validate(&document);
+        let diagnostics: Vec<ApiDiagnostic> = report
+            .diagnostics()
+            .iter()
+            .map(|d| ApiDiagnostic::Diagnostic(d.clone()))
+            .collect();
 
-    if result.has_output() || !result.diagnostics.has_errors() {
         with_request_id(
             &id,
-            Json(CompileResponse {
+            Json(ValidateResponse {
                 success: true,
-                module_name: result.module_name,
-                verilog: result.verilog,
+                valid: !report.has_errors(),
                 diagnostics,
-                source_map: result.source_map,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 compiler_version: KERNEL_VERSION,
                 request_id: id.clone(),
             }),
         )
-    } else {
-        error_response_with_diagnostics(
-            StatusCode::UNPROCESSABLE_ENTITY,
+    })
+    .await
+}
+
+async fn compile_verilog(
+    Extension((kernel, max_body, work_slots)): Extension<(Kernel, usize, Arc<Semaphore>)>,
+    request: Request,
+) -> Response {
+    let id = request_id();
+
+    let content_type_error = require_json_content_type(request.headers());
+    if let Err(msg) = content_type_error {
+        return error_response(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
             &id,
-            "SEMANTIC_ERROR",
-            "Document has semantic errors that prevent compilation.",
-            diagnostics,
-        )
+            "UNSUPPORTED_MEDIA_TYPE",
+            msg,
+        );
     }
+
+    let body_bytes = match to_bytes(request.into_body(), max_body).await {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            if is_length_limit_error(&err) {
+                return error_response(
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    &id,
+                    "DOCUMENT_TOO_LARGE",
+                    format!("Request body exceeds the {} byte limit.", max_body),
+                );
+            }
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &id,
+                "INTERNAL_ERROR",
+                "Failed to read request body.".to_owned(),
+            );
+        }
+    };
+
+    let work_id = id.clone();
+    run_kernel_work(work_slots, &id, move || {
+        let id = work_id;
+        let text = match std::str::from_utf8(&body_bytes) {
+            Ok(text) => text,
+            Err(_) => {
+                return error_response(
+                    StatusCode::BAD_REQUEST,
+                    &id,
+                    "MALFORMED_JSON",
+                    "Request body is not valid UTF-8.".to_owned(),
+                );
+            }
+        };
+
+        let document = match CircuitDocument::from_json_with_limits(text, kernel.limits()) {
+            Ok(doc) => doc,
+            Err(error) => {
+                let diagnostics = parse_error_diagnostics(&error);
+                let (status, category, message) = classify_parse_error(&error);
+                if diagnostics.is_empty() {
+                    return error_response(status, &id, category, message);
+                }
+                return error_response_with_diagnostics(
+                    status,
+                    &id,
+                    category,
+                    message,
+                    diagnostics,
+                );
+            }
+        };
+
+        let result = kernel.compile_verilog(&document, &CompileOptions::default());
+        let diagnostics: Vec<ApiDiagnostic> = result
+            .diagnostics
+            .diagnostics()
+            .iter()
+            .map(|d| ApiDiagnostic::Diagnostic(d.clone()))
+            .collect();
+
+        if result.has_output() || !result.diagnostics.has_errors() {
+            with_request_id(
+                &id,
+                Json(CompileResponse {
+                    success: true,
+                    module_name: result.module_name,
+                    verilog: result.verilog,
+                    diagnostics,
+                    source_map: result.source_map,
+                    schema_version: SUPPORTED_SCHEMA_VERSION,
+                    compiler_version: KERNEL_VERSION,
+                    request_id: id.clone(),
+                }),
+            )
+        } else {
+            error_response_with_diagnostics(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                &id,
+                "SEMANTIC_ERROR",
+                "Document has semantic errors that prevent compilation.",
+                diagnostics,
+            )
+        }
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -662,6 +745,148 @@ mod tests {
         include_str!("../../../tests/fixtures/invalid/unsupported-version.json");
     const MISSING_REQUIRED: &str =
         include_str!("../../../tests/fixtures/invalid/missing-required-field.json");
+
+    #[test]
+    fn kernel_requests_wait_for_blocking_capacity_while_health_responds() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let (release, blocked) = std::sync::mpsc::channel::<()>();
+
+        runtime.block_on(async {
+            let (started, running) = tokio::sync::oneshot::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                started.send(()).unwrap();
+                // Dropping `release` also frees the thread if an assertion fails.
+                let _ = blocked.recv();
+            });
+            running.await.unwrap();
+
+            let mut health_app = RouterBuilder::new()
+                .max_concurrent_kernel_work(NonZeroUsize::new(1).unwrap())
+                .finish();
+            let requests = [
+                ("/api/v1/validate", MALFORMED, StatusCode::BAD_REQUEST),
+                (
+                    "/api/v1/compile/verilog",
+                    MALFORMED,
+                    StatusCode::BAD_REQUEST,
+                ),
+                ("/api/v1/validate", MINIMAL_AND, StatusCode::OK),
+                ("/api/v1/compile/verilog", MINIMAL_AND, StatusCode::OK),
+            ];
+            let mut work_requests = Vec::new();
+            for (uri, body, _) in requests {
+                let mut work_app = health_app.clone();
+                let request = Request::builder()
+                    .method("POST")
+                    .uri(uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap();
+                work_requests.push(Box::pin(async move { call(&mut work_app, request).await }));
+            }
+            std::future::poll_fn(|cx| {
+                for work_request in &mut work_requests {
+                    assert!(
+                        work_request.as_mut().poll(cx).is_pending(),
+                        "parsing and kernel work must await blocking capacity"
+                    );
+                }
+                std::task::Poll::Ready(())
+            })
+            .await;
+
+            let response = call(
+                &mut health_app,
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            release.send(()).unwrap();
+            blocker.await.unwrap();
+            for (work_request, (_, _, status)) in work_requests.into_iter().zip(requests) {
+                assert_eq!(work_request.await.status(), status);
+            }
+        });
+    }
+
+    #[tokio::test]
+    async fn waiting_kernel_work_is_discarded_on_cancellation_before_spawn() {
+        let slots = Arc::new(Semaphore::new(1));
+        let held_slot = slots.clone().acquire_owned().await.unwrap();
+        let (started, running) = tokio::sync::oneshot::channel();
+        let mut waiting = Box::pin(run_kernel_work(slots.clone(), "req-waiting", move || {
+            started.send(()).unwrap();
+            StatusCode::NO_CONTENT.into_response()
+        }));
+        std::future::poll_fn(|cx| {
+            assert!(waiting.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+
+        drop(waiting);
+        assert!(
+            running.await.is_err(),
+            "work awaiting a slot must not have been spawned"
+        );
+        drop(held_slot);
+        assert!(slots.try_acquire_owned().is_ok());
+    }
+
+    #[tokio::test]
+    async fn cancelled_running_kernel_work_holds_its_slot_until_it_exits() {
+        let slots = Arc::new(Semaphore::new(1));
+        let work_slots = slots.clone();
+        let (started, running) = tokio::sync::oneshot::channel();
+        let (release, blocked) = std::sync::mpsc::channel::<()>();
+        let job = tokio::spawn(async move {
+            run_kernel_work(work_slots, "req-running", move || {
+                started.send(()).unwrap();
+                let _ = blocked.recv();
+                StatusCode::NO_CONTENT.into_response()
+            })
+            .await
+        });
+        running.await.unwrap();
+        job.abort();
+        assert!(job.await.unwrap_err().is_cancelled());
+
+        let mut next_slot = Box::pin(slots.acquire_owned());
+        std::future::poll_fn(|cx| {
+            assert!(
+                next_slot.as_mut().poll(cx).is_pending(),
+                "cancellation must retain the running job's slot"
+            );
+            std::task::Poll::Ready(())
+        })
+        .await;
+        release.send(()).unwrap();
+        assert!(next_slot.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn panicked_kernel_work_preserves_error_envelope_and_releases_slot() {
+        let slots = Arc::new(Semaphore::new(1));
+        let response = run_kernel_work(slots.clone(), "req-panicked", || {
+            panic!("kernel job panic");
+        })
+        .await;
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let (json, id) = body_json_and_request_id(response).await;
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error"]["category"], "INTERNAL_ERROR");
+        assert_eq!(json["diagnostics"], serde_json::json!([]));
+        assert_eq!(json["requestId"], "req-panicked");
+        assert_eq!(id, "req-panicked");
+        assert!(slots.try_acquire_owned().is_ok());
+    }
 
     #[tokio::test]
     async fn site_returns_kernel_workbench() {

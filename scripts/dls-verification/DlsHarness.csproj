@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <DlsRoot Condition="'$(DlsRoot)' == ''">/tmp/jsonrtl-dls-upstream</DlsRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Simulation/Simulator.cs" Link="Upstream/Simulator.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Simulation/SimChip.cs" Link="Upstream/SimChip.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Simulation/SimPin.cs" Link="Upstream/SimPin.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Simulation/PinState.cs" Link="Upstream/PinState.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Description/Types/ChipDescription.cs" Link="Upstream/ChipDescription.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Description/Types/ProjectDescription.cs" Link="Upstream/ProjectDescription.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Description/Types/AppSettings.cs" Link="Upstream/AppSettings.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Description/Types/SubTypes/*.cs" Link="Upstream/Description/%(Filename)%(Extension)" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Description/Helpers/ChipTypeHelper.cs" Link="Upstream/ChipTypeHelper.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Description/Serialization/Serializer.cs" Link="Upstream/Serializer.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Game/Project/BuiltinChipCreator.cs" Link="Upstream/BuiltinChipCreator.cs" />
+    <Compile Include="$(DlsRoot)/Assets/Scripts/Game/Project/ChipLibrary.cs" Link="Upstream/ChipLibrary.cs" />
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(DlsRoot)/Assets/Scripts/Description/Serialization/Newtonsoft/Runtime/Newtonsoft.Json.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

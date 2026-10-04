@@ -620,6 +620,7 @@ dependencies = [
  "clap",
  "jsonrtl",
  "jsonrtl-profiles",
+ "libc",
  "serde",
  "serde_json",
 ]

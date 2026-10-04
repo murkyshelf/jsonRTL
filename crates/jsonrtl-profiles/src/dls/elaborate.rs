@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Guards against pathological or cyclic chip nesting.
-const MAX_DEPTH: usize = 256;
+pub(super) const MAX_DEPTH: usize = 256;
 
 /// Guards against exponential inlining. Nesting is bounded by [`MAX_DEPTH`], but
 /// a chip that instantiates its child twice doubles the instance count per
@@ -112,10 +112,60 @@ pub fn elaborate(project: &DlsProject, chip_name: &str) -> Result<FlatNetlist, P
     let mut stack = vec![chip_name.to_string()];
     elaborator.elab_chip(chip, chip_name, &boundary, &mut stack)?;
 
+    check_drivers(&mut elaborator, chip_name, &input_pins)?;
+
     Ok(assign_nets(&mut elaborator, &input_pins, &output_pins))
 }
 
 type PinBinding = (String, u32, Vec<usize>);
+
+/// Net assignment gives each input its own canonical port net, which would
+/// hide a short between inputs. Check physical driver bits before naming nets.
+fn check_drivers(
+    elaborator: &mut Elaborator<'_>,
+    chip_name: &str,
+    input_pins: &[PinBinding],
+) -> Result<(), ProfileError> {
+    enum Driver<'a> {
+        Input(&'a str, usize),
+        Nand(usize),
+    }
+    impl Driver<'_> {
+        fn label(&self) -> String {
+            match self {
+                Self::Input(name, bit) => format!("input '{name}' bit {bit}"),
+                Self::Nand(index) => format!("NAND instance {index} output"),
+            }
+        }
+    }
+
+    let inputs = input_pins.iter().flat_map(|(name, _, nodes)| {
+        nodes
+            .iter()
+            .enumerate()
+            .map(move |(bit, node)| (*node, Driver::Input(name, bit)))
+    });
+    let nand_outputs = elaborator
+        .nands
+        .iter()
+        .enumerate()
+        .map(|(index, (_, _, node))| (*node, Driver::Nand(index)));
+    let mut drivers = BTreeMap::new();
+    for (node, driver) in inputs.chain(nand_outputs) {
+        let root = elaborator.uf.find(node);
+        if let Some(previous) = drivers.insert(root, driver) {
+            return Err(ProfileError::Structure {
+                chip: chip_name.to_string(),
+                detail: format!(
+                    "multiple drivers share one signal bit: {} and {}",
+                    previous.label(),
+                    drivers[&root].label()
+                ),
+            });
+        }
+    }
+    Ok(())
+}
 
 /// Groups union-find roots into canonical nets.
 ///
@@ -573,6 +623,113 @@ mod tests {
             chip_names: vec![name.to_string()],
             chips: BTreeMap::from([(name.to_string(), chip)]),
         }
+    }
+
+    fn assert_driver_collision(chip: ChipDef) {
+        let name = chip.name.clone();
+        match elaborate(&single(&name, chip), &name).unwrap_err() {
+            ProfileError::Structure { chip, detail } => {
+                assert_eq!(chip, name);
+                assert!(detail.contains("drivers"), "{detail}");
+            }
+            other => panic!("expected a driver collision, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_two_boundary_inputs_joined_to_one_output() {
+        assert_driver_collision(ChipDef {
+            name: "short".into(),
+            input_pins: vec![pin("a", 1), pin("b", 2)],
+            output_pins: vec![pin("y", 3)],
+            sub_chips: Vec::new(),
+            wires: vec![wire((1, 0), (3, 0)), wire((2, 0), (3, 0))],
+        });
+    }
+
+    #[test]
+    fn rejects_shorted_bits_of_one_boundary_input() {
+        assert_driver_collision(ChipDef {
+            name: "short_bus".into(),
+            input_pins: vec![wide_pin("a", 1, 4)],
+            output_pins: vec![pin("y", 2)],
+            sub_chips: vec![crate::dls::model::SubChip {
+                name: "4-1BIT".into(),
+                id: 10,
+            }],
+            wires: vec![
+                wire((1, 0), (10, 0)),
+                wire((10, 1), (2, 0)),
+                wire((10, 2), (2, 0)),
+            ],
+        });
+    }
+
+    #[test]
+    fn rejects_a_boundary_input_shorted_to_a_nand_output() {
+        assert_driver_collision(ChipDef {
+            name: "short_gate".into(),
+            input_pins: vec![pin("a", 1)],
+            output_pins: vec![pin("y", 2)],
+            sub_chips: vec![crate::dls::model::SubChip {
+                name: "NAND".into(),
+                id: 10,
+            }],
+            wires: vec![
+                wire((1, 0), (10, 0)),
+                wire((1, 0), (10, 1)),
+                wire((1, 0), (2, 0)),
+                wire((10, 2), (2, 0)),
+            ],
+        });
+    }
+
+    #[test]
+    fn rejects_two_nand_outputs_joined_to_one_output() {
+        assert_driver_collision(ChipDef {
+            name: "short_gates".into(),
+            input_pins: vec![pin("a", 1)],
+            output_pins: vec![pin("y", 2)],
+            sub_chips: vec![
+                crate::dls::model::SubChip {
+                    name: "NAND".into(),
+                    id: 10,
+                },
+                crate::dls::model::SubChip {
+                    name: "NAND".into(),
+                    id: 11,
+                },
+            ],
+            wires: vec![
+                wire((1, 0), (10, 0)),
+                wire((1, 0), (10, 1)),
+                wire((1, 0), (11, 0)),
+                wire((1, 0), (11, 1)),
+                wire((10, 2), (2, 0)),
+                wire((11, 2), (2, 0)),
+            ],
+        });
+    }
+
+    #[test]
+    fn one_input_can_fan_out_to_multiple_outputs_and_duplicate_wires() {
+        let chip = ChipDef {
+            name: "fanout".into(),
+            input_pins: vec![pin("a", 1)],
+            output_pins: vec![pin("y", 2), pin("z", 3)],
+            sub_chips: Vec::new(),
+            wires: vec![
+                wire((1, 0), (2, 0)),
+                wire((1, 0), (2, 0)),
+                wire((1, 0), (3, 0)),
+            ],
+        };
+        let flat = elaborate(&single("fanout", chip), "fanout").unwrap();
+        assert_eq!(flat.buffers.len(), 2);
+        let document = crate::dls::lower::lower("fanout", &flat);
+        let result = jsonrtl::Kernel::default()
+            .compile_verilog(&document, &jsonrtl::CompileOptions::default());
+        assert!(result.has_output(), "{:?}", result.diagnostics);
     }
 
     #[test]

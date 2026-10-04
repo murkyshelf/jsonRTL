@@ -19,7 +19,7 @@ const SELF_LOOP: &str = include_str!("../../../tests/fixtures/semantic/self-loop
 #[test]
 fn diagnostic_registry_is_complete_unique_and_documented() {
     const DOCUMENTATION: &str = include_str!("../../../docs/diagnostics.md");
-    assert_eq!(DIAGNOSTIC_CODES.len(), 34);
+    assert_eq!(DIAGNOSTIC_CODES.len(), 35);
     let mut spellings = BTreeSet::new();
     for code in DIAGNOSTIC_CODES {
         assert!(spellings.insert(code.as_str()), "duplicate code {code}");

@@ -11,8 +11,10 @@ are unrelated to parsing, validation, normalization, and deterministic RTL emiss
 
 ## Decision
 
-Keep tool execution in a future physical-design orchestration crate or service. The
-core library produces deterministic Verilog and source maps only. The orchestrator
+Keep tool execution outside the core library. The CLI owns current Yosys synthesis,
+Icarus checking/simulation, and DLS export, using a shared bounded process runner.
+Future physical-design execution belongs in an orchestration crate or service. The
+core library produces deterministic Verilog and source maps only. An orchestrator
 accepts those artifacts plus explicit tool/PDK configuration and records all reports,
 logs, and outputs.
 
@@ -30,4 +32,3 @@ logs, and outputs.
 The core stays portable, testable, and suitable for WASM. Physical flows require an
 additional service and explicit artifact protocol. Tool versions, PDK selection,
 timeouts, and job isolation can evolve without contaminating the circuit contract.
-
